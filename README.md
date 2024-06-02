@@ -1,10 +1,19 @@
 # Snapfig
 
-The tool manages the concept of locations inside your system. Each one will have an associated repository and a frequency of update. Even the home directory will be able to be versioned, with a semi-flat structure including only the dotfiles and some user-specified directories (to avoid versioning the entire directory in a repository).
+Snapfig is a tool designed to manage and version locations within your system. While the feature set is a floating target, the current behavior is as follows:
+
+- Snapfig scans the user's home directory (or an alternative directory specified by the user) to create a list of locations that are typically backed up and/or versioned.
+- This list is editable, allowing the user to add or remove paths. Initially, this process will be text-based (using YAML), but a future CLI tool will streamline this task.
+- Snapfig watches these locations for changes and replicates them at a predetermined or configurable frequency to a specific location.
+- All changes are automatically versioned.
+- In the future, Snapfig will be able to recover the latest or a specific version from local storage or a remote repository. This feature will be useful for setting up a complete machine from scratch.
+
+Please note that this README should be seen as a declaration of intent and a placeholder guide for defining future features. Snapfig is currently not ready for use.
 
 ## Notes
 
 Please note that this README should be seen as a declaration of intent and a placeholder guide for defining future features. Snapfig is currently not ready for use.
+
 
 ## Usage
 
@@ -12,21 +21,20 @@ Snapfig provides various commands for managing your configuration files. Here ar
 
 ### Initialize Configuration
 
-To initialize a configuration file, use the `init` command:
+To initialize a configuration file, use the `scan` command:
 
 ```sh
-snapfig init --config /path/to/config.yaml
+snapfig scan
 ```
 
-This command will create a sample configuration file at the specified path.
-
-### Run Versioning Process
-
-To start the versioning process, use the `run` command:
+This command will scan the user's home directory by default. If you wish to specify an alternative directory as the root for the scan, use the --path option:
 
 ```sh
-snapfig run --config /path/to/config.yaml
+snapfig scan --path /alt/path
 ```
 
-This command will version the specified directories and create snapshots according to the configuration.
-At some point, a daemon will keep the repositories updated.
+In both cases, the scan command will create a configuration file in the specified or default directory at `~/.config/snapfig/config.yml`.
+
+### Start Versioning Process
+
+[Not implemented yet]
