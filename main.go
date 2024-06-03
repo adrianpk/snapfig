@@ -14,7 +14,7 @@ func main() {
 		Short: "A tool for versioning system configuration files",
 	}
 
-	rootCmd.AddCommand(command.ScanCmd)
+	rootCmd.AddCommand(command.ScanCmd.Command)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
