@@ -16,6 +16,10 @@ install: build
 clean:
 	rm -f $(BINARY_NAME)
 
+# Run the Go tests
+test:
+	go test ./...
+
 # Help message
 help:
 	@echo "Snapfig"
@@ -25,5 +29,6 @@ help:
 	@echo "  make build    Build the project"
 	@echo "  make install  Install the binary system-wide"
 	@echo "  make clean    Clean up build artifacts"
+	@echo "  make test     Test the project"
 	@echo "  make help     Show this help message"
 
