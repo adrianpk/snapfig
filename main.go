@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
-	"os"
+	"log"
 
 	"github.com/adrianpk/snapfig/internal/command"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func main() {
@@ -14,11 +14,16 @@ func main() {
 		Short: "A tool for versioning system configuration files",
 	}
 
-	rootCmd.AddCommand(command.ScanCmd.Command)
-	rootCmd.AddCommand(command.CopyCmd.Command)
+	rootCmd.PersistentFlags().String("git", "disable", "Git flag can be 'remove' or 'disable'")
+	viper.BindPFlag("git", rootCmd.PersistentFlags().Lookup("git"))
+
+	scanCmd := command.ScanCommand
+	rootCmd.AddCommand(scanCmd)
+
+	copyCmd := command.CopyCommand
+	rootCmd.AddCommand(copyCmd)
 
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
 }

@@ -17,20 +17,32 @@ Please note that this README should be seen as a declaration of intent and a pla
 
 ## Usage
 
-Snapfig provides various commands for managing your configuration files. Here are some common usage examples:
+To use Snapfig, you can run the `snapfig` command followed by a subcommand. Currently, the available subcommands are `scan`, `copy`, and others.
 
-### Initialize Configuration
-
-To initialize a configuration file, use the `scan` command:
-
-```sh
+```bash
 snapfig scan
+snapfig copy
 ```
 
-This command will scan the user's home directory by default. If you wish to specify an alternative directory as the root for the scan, use the --path option:
+### Scan Command
 
-```sh
-snapfig scan --path /alt/path
+The `scan` command is used to scan files and perform operations based on the provided flags.
+
+#### Git Flag
+
+The `git` flag modifies how the `scan` command handles Git repositories in the scanned files. It can have two values: `remove` and `disable`.
+
+- `remove`: The `scan` command will remove all Git related setup (.git directories of main repo and submodules) in the copied version of the directory stored in the Snapfig vault. The original directory remains untouched, preserving its Git setup.
+
+- `disable`: The `scan` command will preserve the Git setup in the copied version of the directory stored in the Snapfig vault, but the .git directories (main and submodules) will be renamed to `.git_disabled`. Again, the original directory remains untouched.
+
+This gives you the freedom to preserve the Git version control in the original directory if needed, while still allowing Snapfig to operate on a version of the directory without Git interference.
+
+Example usage:
+
+```bash
+snapfig scan --git=remove
+snapfig scan --git=disable
 ```
 
 In both cases, the scan command will create a configuration file in the specified or default directory at `~/.config/snapfig/config.yml`.
