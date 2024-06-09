@@ -4,62 +4,68 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
+	"github.com/adrianpk/snapfig/internal/config"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	yaml "gopkg.in/yaml.v2"
 )
 
-type Command struct {
-	*cobra.Command
-	fs   afero.Fs
-	root string
-	dirs []string
+type Snapfig struct {
+	Git      string    `yaml:"git"`
+	Watching []Watched `yaml:"watching"`
 }
 
-var ScanCmd = NewScanCommand()
-
-func NewScanCommand() *Command {
-	cmd := &Command{
-		Command: &cobra.Command{
-			Use:   "scan",
-			Short: "Scan common locations in the user's home directory",
-		},
-		dirs: []string{},
-	}
-
-	cmd.Flags().StringVarP(&cmd.root, "path", "p", "", "Path to start scanning from")
-	cmd.Command.RunE = cmd.run
-
-	return cmd
+type Watched struct {
+	Path string `yaml:"path"`
+	Git  string `yaml:"git"`
 }
 
-func (c *Command) RunE() error {
-	return c.Command.RunE(c.Command, nil)
+var ScanCommand = &cobra.Command{
+	Use:   "scan",
+	Short: "Scan common locations in the user's home directory",
+	RunE: func(c *cobra.Command, args []string) error {
+		cfg := config.Config{
+			Git: viper.GetString("git"),
+		}
+
+		err := cfg.Validate()
+		if err != nil {
+			return err
+		}
+
+		w := NewWorker(&cfg)
+
+		return w.Scan()
+	},
 }
 
-func (cmd *Command) run(c *cobra.Command, args []string) error {
-	if cmd.root == "" {
+func (w *Worker) Scan() error {
+	if w.fsRoot == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return err
 		}
-		cmd.root = home
+		w.fsRoot = home
 	}
 
-	cmd.fs = afero.NewBasePathFs(afero.NewOsFs(), cmd.root)
+	w.fs = afero.NewBasePathFs(afero.NewOsFs(), w.fsRoot)
 
-	configDir, err := cmd.ensureConfigDir()
+	toolDir, err := w.ensureSnapfigDir()
 	if err != nil {
 		return err
 	}
 
-	err = cmd.doScan(commonLocations())
+	w.toolDir = toolDir
+
+	err = w.doScan(commonLocations())
 	if err != nil {
 		return err
 	}
 
-	err = cmd.createConfigFile(configDir)
+	err = w.createSnapfigFile()
 	if err != nil {
 		return err
 	}
@@ -67,23 +73,23 @@ func (cmd *Command) run(c *cobra.Command, args []string) error {
 	return nil
 }
 
-func (cmd *Command) ensureConfigDir() (string, error) {
-	configDir := filepath.Join(".config", "snapfig")
-	if err := cmd.fs.MkdirAll(configDir, 0755); err != nil {
+func (w *Worker) ensureSnapfigDir() (string, error) {
+	toolDir := filepath.Join(".config", "snapfig")
+	if err := w.fs.MkdirAll(toolDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create config directory: %w", err)
 	}
-	return configDir, nil
+	return toolDir, nil
 }
 
-func (cmd *Command) doScan(dirs []string) error {
-	cmd.userMsg("Scanning directories:")
+func (w *Worker) doScan(dirs []string) error {
+	w.userMsg("Scanning directories:")
 	for _, dir := range dirs {
-		if _, err := cmd.fs.Stat(dir); os.IsNotExist(err) {
-			cmd.userMsg(fmt.Sprintf("Discarding non-existent directory: %s", dir))
+		if _, err := w.fs.Stat(dir); os.IsNotExist(err) {
+			w.userMsg(fmt.Sprintf("Discarding non-existent directory: %s", dir))
 			continue
 		}
 
-		err := afero.Walk(cmd.fs, dir, func(path string, info os.FileInfo, err error) error {
+		err := afero.Walk(w.fs, dir, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
@@ -91,54 +97,79 @@ func (cmd *Command) doScan(dirs []string) error {
 		})
 
 		if err != nil {
-			cmd.userMsg(fmt.Sprintf("Error walking directory: %s", dir))
+			w.userMsg(fmt.Sprintf("Error walking directory: %s", dir))
 			continue
 		}
 
-		cmd.userMsg(fmt.Sprintf("Processing directory: %s", dir))
-		cmd.dirs = append(cmd.dirs, dir)
+		w.userMsg(fmt.Sprintf("Processing directory: %s", dir))
+		w.dirs = append(w.dirs, dir)
 	}
 
 	return nil
 }
 
-func (cmd *Command) createConfigFile(configDir string) error {
-	configFile := filepath.Join(configDir, "config.yml")
-	if _, err := cmd.fs.Stat(configFile); os.IsNotExist(err) {
-		file, err := cmd.fs.Create(configFile)
+func (w *Worker) createSnapfigFile() error {
+	// snapfigFile := filepath.Join(wfsRoot, w.toolDir, "config.yml")
+	snapfigFile := filepath.Join(w.toolDir, "config.yml")
+
+	err := w.moveOld(snapfigFile)
+	if err != nil {
+		return err
+	}
+
+	file, err := w.fs.Create(snapfigFile)
+	if err != nil {
+		w.userMsg(fmt.Sprintf("Error creating config file %s: %v\n", snapfigFile, err))
+		return err
+	}
+	defer file.Close()
+
+	watched := make([]Watched, len(w.dirs))
+	for i, path := range w.dirs {
+		watched[i] = Watched{Path: path, Git: w.Cfg().Git}
+	}
+
+	snapfig := &Snapfig{
+		Git:      w.Cfg().Git,
+		Watching: watched,
+	}
+
+	data, err := yaml.Marshal(snapfig)
+	if err != nil {
+		w.userMsg(fmt.Sprintf("Error marshaling data: %v\n", err))
+		return err
+	}
+
+	fmt.Printf("Writing to file: %s\n", snapfigFile)
+	_, err = file.Write(data)
+	if err != nil {
+		w.userMsg(fmt.Sprintf("Error writing file: %v\n", err))
+		return err
+	}
+
+	w.userMsg(fmt.Sprintf("Config file created at %s\n", snapfigFile))
+	w.userMsg("Common locations have been included in the config file.")
+	w.userMsg("Feel free to modify it to suit your needs.")
+
+	return nil
+}
+
+func (w *Worker) moveOld(fullPath string) error {
+	fmt.Printf("Checking if file exists: %s\n", fullPath)
+	if _, err := w.fs.Stat(fullPath); err == nil {
+		dateSuffix := time.Now().Format("20060102150405")
+		newName := filepath.Join(w.toolDir, "config.yml."+dateSuffix)
+
+		err := w.fs.Rename(fullPath, newName)
 		if err != nil {
-			cmd.userMsg(fmt.Sprintf("Error creating config file %s: %v\n", configFile, err))
-			return err
+			return fmt.Errorf("error moving old config file: %w", err)
 		}
-		defer file.Close()
-
-		config := map[string][]string{
-			"watching": cmd.dirs,
-		}
-
-		encoder := yaml.NewEncoder(file)
-		if err := encoder.Encode(&config); err != nil {
-			cmd.userMsg(fmt.Sprintf("Error marshaling config data: %v\n", err))
-			return err
-		}
-
-		cmd.userMsg(fmt.Sprintf("\nConfig file created at: %s\n\n", configFile))
-		cmd.userMsg("Common locations have been included in the config file.")
-		cmd.userMsg("Feel free to append other directories as needed.")
-		return nil
+	} else if !os.IsNotExist(err) {
+		fmt.Printf("Error checking if file exists: %v\n", err)
+		return fmt.Errorf("error checking if config file exists: %w", err)
 	}
 
 	return nil
-}
-
-func (cmd *Command) userMsg(message string) {
-	fmt.Println(message)
-}
-
-// SetFS sets a custom filesystem.
-// It's only used for tests for now.
-func (c *Command) SetFS(fs afero.Fs) {
-	c.fs = fs
 }
 
 func commonLocations() []string {
