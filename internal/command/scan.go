@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/adrianpk/snapfig/internal/config"
@@ -11,6 +12,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	yaml "gopkg.in/yaml.v2"
+)
+
+const (
+	SnapfigConfigDir = "snapfig"
+	ConfigDir        = ".config"
+	ConfigFile = "config.yml"
 )
 
 type Snapfig struct {
@@ -43,24 +50,12 @@ var ScanCommand = &cobra.Command{
 }
 
 func (w *Worker) Scan() error {
-	if w.fsRoot == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return err
-		}
-		w.fsRoot = home
-	}
-
-	w.fs = afero.NewBasePathFs(afero.NewOsFs(), w.fsRoot)
-
-	toolDir, err := w.ensureSnapfigDir()
+	err := w.Setup()
 	if err != nil {
 		return err
 	}
 
-	w.toolDir = toolDir
-
-	err = w.doScan(commonLocations())
+	err = w.doScan()
 	if err != nil {
 		return err
 	}
@@ -74,14 +69,16 @@ func (w *Worker) Scan() error {
 }
 
 func (w *Worker) ensureSnapfigDir() (string, error) {
-	toolDir := filepath.Join(".config", "snapfig")
-	if err := w.fs.MkdirAll(toolDir, 0755); err != nil {
+	toolConfigDir := filepath.Join(ConfigDir, SnapfigConfigDir)
+	if err := w.fs.MkdirAll(toolConfigDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create config directory: %w", err)
 	}
-	return toolDir, nil
+	return toolConfigDir, nil
 }
 
-func (w *Worker) doScan(dirs []string) error {
+func (w *Worker) doScan() error {
+	dirs := commonLocations()
+	excluded := excluded()
 	w.userMsg("Scanning directories:")
 	for _, dir := range dirs {
 		if _, err := w.fs.Stat(dir); os.IsNotExist(err) {
@@ -93,6 +90,13 @@ func (w *Worker) doScan(dirs []string) error {
 			if err != nil {
 				return err
 			}
+
+			for _, ed := range excluded {
+				if strings.Contains(path, ed) {
+					return filepath.SkipDir
+				}
+			}
+
 			return nil
 		})
 
@@ -109,8 +113,8 @@ func (w *Worker) doScan(dirs []string) error {
 }
 
 func (w *Worker) createSnapfigFile() error {
-	// snapfigFile := filepath.Join(wfsRoot, w.toolDir, "config.yml")
-	snapfigFile := filepath.Join(w.toolDir, "config.yml")
+	// snapfigFile := filepath.Join(wfsRoot, w.toolConfigDir, "config.yml")
+	snapfigFile := filepath.Join(w.configDir, "config.yml")
 
 	err := w.moveOld(snapfigFile)
 	if err != nil {
@@ -158,7 +162,7 @@ func (w *Worker) moveOld(fullPath string) error {
 	fmt.Printf("Checking if file exists: %s\n", fullPath)
 	if _, err := w.fs.Stat(fullPath); err == nil {
 		dateSuffix := time.Now().Format("20060102150405")
-		newName := filepath.Join(w.toolDir, "config.yml."+dateSuffix)
+		newName := filepath.Join(w.configDir, "config.yml."+dateSuffix)
 
 		err := w.fs.Rename(fullPath, newName)
 		if err != nil {
@@ -241,5 +245,11 @@ func commonLocations() []string {
 		".config/notepad++",
 		"AppData",
 		"Documents/Outlook Files",
+	}
+}
+
+func excluded() []string {
+	return []string{
+		".snapfig",
 	}
 }
