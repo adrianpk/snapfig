@@ -35,8 +35,8 @@ func (w *Worker) Copy() error {
 	}
 
 	var snapfig *Snapfig
-	
-	configFile := filepath.Join(w.configDir, ConfigFile)  
+
+	configFile := filepath.Join(w.configDir, ConfigFile)
 	data, err := afero.ReadFile(w.fs, configFile)
 	if err != nil {
 		return err
@@ -56,29 +56,63 @@ func (w *Worker) Copy() error {
 			watched.Git = snapfig.Git
 		}
 
-		err := afero.Walk(w.fs, watched.Path, func(path string, info os.FileInfo, err error) error {
+		info, err := w.fs.Stat(watched.Path)
+		if os.IsNotExist(err) {
+			continue
+		}
+
+		destPath := filepath.Join(SnapfigDir, DefaultVaultDir, watched.Path)
+
+		if err == nil && info.IsDir() {
+			if err := w.CopyDir(watched.Path, destPath); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if err := w.CopyFile(watched.Path, destPath); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// CopyDir recursively copies a directory tree, attempting to preserve permissions.
+// Source directory must exist, destination directory must not exist.
+func (w *Worker) CopyDir(src string, dst string) error {
+	src = filepath.Clean(src)
+	dst = filepath.Clean(dst)
+
+	info, err := w.fs.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	err = w.fs.MkdirAll(dst, info.Mode())
+	if err != nil {
+		return err
+	}
+
+	entries, err := afero.ReadDir(w.fs, src)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		if entry.IsDir() {
+			err = w.CopyDir(srcPath, dstPath)
 			if err != nil {
 				return err
 			}
-
-			destPath := filepath.Join(SnapfigDir, DefaultVaultDir, path)
-			if !info.IsDir() {
-				return nil
+		} else {
+			err = w.CopyFile(srcPath, dstPath)
+			if err != nil {
+				return err
 			}
-
-			if info.Name() == ".git" && watched.Git == "disable" {
-				return afero.NewOsFs().Rename(path, path+"_disabled")
-			}
-
-			if info.Name() == ".git" && watched.Git == "remove" {
-				return afero.NewOsFs().RemoveAll(path)
-			}
-
-			return afero.NewOsFs().MkdirAll(destPath, info.Mode())
-		})
-
-		if err != nil {
-			return err
 		}
 	}
 
