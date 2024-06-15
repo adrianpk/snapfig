@@ -64,8 +64,14 @@ func (w *Worker) Copy() error {
 		destPath := filepath.Join(SnapfigDir, DefaultVaultDir, watched.Path)
 
 		if err == nil && info.IsDir() {
-			if err := w.CopyDir(watched.Path, destPath); err != nil {
-				return err
+			if watched.Path == "." {
+				if err := w.fs.MkdirAll(destPath, info.Mode()); err != nil {
+					return err
+				}
+			} else {
+				if err := w.CopyDir(watched.Path, destPath); err != nil {
+					return err
+				}
 			}
 			continue
 		}
@@ -78,45 +84,50 @@ func (w *Worker) Copy() error {
 	return nil
 }
 
-// CopyDir recursively copies a directory tree, attempting to preserve permissions.
-// Source directory must exist, destination directory must not exist.
 func (w *Worker) CopyDir(src string, dst string) error {
-	src = filepath.Clean(src)
-	dst = filepath.Clean(dst)
+    src = filepath.Clean(src)
+    dst = filepath.Clean(dst)
 
-	info, err := w.fs.Stat(src)
-	if err != nil {
-		return err
-	}
+    var info os.FileInfo
+    var err error
 
-	err = w.fs.MkdirAll(dst, info.Mode())
-	if err != nil {
-		return err
-	}
+    info, err = w.fs.Stat(src)
+    if err != nil {
+        return err
+    }
 
-	entries, err := afero.ReadDir(w.fs, src)
-	if err != nil {
-		return err
-	}
+    err = w.fs.MkdirAll(dst, info.Mode())
+    if err != nil {
+        return err
+    }
 
-	for _, entry := range entries {
-		srcPath := filepath.Join(src, entry.Name())
-		dstPath := filepath.Join(dst, entry.Name())
+    entries, err := afero.ReadDir(w.fs, src)
+    if err != nil {
+        return err
+    }
 
-		if entry.IsDir() {
-			err = w.CopyDir(srcPath, dstPath)
-			if err != nil {
-				return err
-			}
-		} else {
-			err = w.CopyFile(srcPath, dstPath)
-			if err != nil {
-				return err
-			}
-		}
-	}
+    for _, entry := range entries {
+        srcPath := filepath.Join(src, entry.Name())
+        dstPath := filepath.Join(dst, entry.Name())
 
-	return nil
+        if entry.Mode()&os.ModeSymlink != 0 {
+            continue
+        }
+
+        if entry.IsDir() {
+            err = w.CopyDir(srcPath, dstPath)
+            if err != nil {
+                return err
+            }
+        } else {
+            err = w.CopyFile(srcPath, dstPath)
+            if err != nil {
+                return err
+            }
+        }
+    }
+
+    return nil
 }
 
 func (w *Worker) ensureVaultDir() (string, error) {
@@ -138,3 +149,4 @@ func (w *Worker) CopyFile(srcFile, dstFile string) error {
 	}
 	return nil
 }
+
