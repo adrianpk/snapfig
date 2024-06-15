@@ -29,59 +29,80 @@ var CopyCommand = &cobra.Command{
 }
 
 func (w *Worker) Copy() error {
-	err := w.Setup()
-	if err != nil {
-		return err
-	}
+    err := w.Setup()
+    if err != nil {
+        return err
+    }
 
-	var snapfig *Snapfig
+    var snapfig *Snapfig
 
-	configFile := filepath.Join(w.configDir, ConfigFile)
-	data, err := afero.ReadFile(w.fs, configFile)
-	if err != nil {
-		return err
-	}
+    configFile := filepath.Join(w.configDir, ConfigFile)
+    data, err := afero.ReadFile(w.fs, configFile)
+    if err != nil {
+        return err
+    }
 
-	err = yaml.Unmarshal(data, &snapfig)
-	if err != nil {
-		return err
-	}
+    err = yaml.Unmarshal(data, &snapfig)
+    if err != nil {
+        return err
+    }
 
-	if snapfig.Git == "" {
-		snapfig.Git = "disable"
-	}
+    if snapfig.Git == "" {
+        snapfig.Git = "disable"
+    }
 
-	for _, watched := range snapfig.Watching {
-		if watched.Git == "" {
-			watched.Git = snapfig.Git
-		}
+    for _, watched := range snapfig.Watching {
+        if watched.Git == "" {
+            watched.Git = snapfig.Git
+        }
 
-		info, err := w.fs.Stat(watched.Path)
-		if os.IsNotExist(err) {
-			continue
-		}
+        info, err := w.fs.Stat(watched.Path)
+        if os.IsNotExist(err) {
+            continue
+        }
 
-		destPath := filepath.Join(SnapfigDir, DefaultVaultDir, watched.Path)
+        destPath := filepath.Join(SnapfigDir, DefaultVaultDir, watched.Path)
 
-		if err == nil && info.IsDir() {
-			if watched.Path == "." {
-				if err := w.fs.MkdirAll(destPath, info.Mode()); err != nil {
-					return err
-				}
-			} else {
-				if err := w.CopyDir(watched.Path, destPath); err != nil {
-					return err
-				}
-			}
-			continue
-		}
+        if err == nil && info.IsDir() {
+            if watched.Path == "." {
+                // Home folder is treated as a special case
+								// Its not processed recursively and its content is stored in the vault's `home` dir.
+                err = w.fs.MkdirAll(filepath.Join(SnapfigDir, DefaultVaultDir, "home"), info.Mode())
+                if err != nil {
+                    return err
+                }
 
-		if err := w.CopyFile(watched.Path, destPath); err != nil {
-			return err
-		}
-	}
+                entries, err := afero.ReadDir(w.fs, watched.Path)
+                if err != nil {
+                    return err
+                }
 
-	return nil
+                for _, entry := range entries {
+                    if entry.IsDir() || entry.Mode()&os.ModeSymlink != 0 {
+                        continue
+                    }
+
+                    srcPath := filepath.Join(watched.Path, entry.Name())
+                    dstPath := filepath.Join(SnapfigDir, DefaultVaultDir, "home", entry.Name())
+                    err = w.CopyFile(srcPath, dstPath)
+                    if err != nil {
+                        return err
+                    }
+                }
+            } else {
+                if err := w.CopyDir(watched.Path, destPath); err != nil {
+                    return err
+                }
+            }
+            continue
+        }
+
+        if err := w.CopyFile(watched.Path, destPath); err != nil {
+            return err
+        }
+    }
+
+    return nil
 }
 
 func (w *Worker) CopyDir(src string, dst string) error {
