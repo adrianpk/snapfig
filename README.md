@@ -137,7 +137,7 @@ Paths are relative to home directory.
 
 ## Planned Improvements
 
-- Smart copy: copy only updated files within directories instead of replicating entire directory structures.
+- ~~Smart copy: copy only updated files within directories instead of replicating entire directory structures.~~
 - Selective restore: Allow restoring only specific dotfiles instead of restoring everything.
 - Improve and polish the interface.
 - Background job for periodic snapshots.

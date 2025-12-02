@@ -36,9 +36,12 @@ type Model struct {
 
 // CopyDoneMsg is sent when copy operation completes.
 type CopyDoneMsg struct {
-	err     error
-	copied  int
-	skipped int
+	err          error
+	copied       int    // paths processed
+	skipped      int    // paths skipped (not found)
+	filesUpdated int    // files actually copied
+	filesSkipped int    // files unchanged
+	filesRemoved int    // stale files removed
 }
 
 // RestoreDoneMsg is sent when restore operation completes.
@@ -62,9 +65,12 @@ type PullDoneMsg struct {
 
 // BackupDoneMsg is sent when backup (copy+push) completes.
 type BackupDoneMsg struct {
-	err     error
-	copied  int
-	skipped int
+	err          error
+	copied       int
+	skipped      int
+	filesUpdated int
+	filesSkipped int
+	filesRemoved int
 }
 
 // SyncDoneMsg is sent when sync (pull+restore) completes.
@@ -107,7 +113,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.status = fmt.Sprintf("Error: %v", msg.err)
 		} else {
-			m.status = fmt.Sprintf("Copied %d paths (%d skipped)", msg.copied, msg.skipped)
+			m.status = fmt.Sprintf("Copied: %d updated, %d unchanged, %d removed",
+				msg.filesUpdated, msg.filesSkipped, msg.filesRemoved)
 		}
 		return m, nil
 
@@ -145,7 +152,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.status = fmt.Sprintf("Error: %v", msg.err)
 		} else {
-			m.status = fmt.Sprintf("Backup complete: %d copied, pushed to remote", msg.copied)
+			m.status = fmt.Sprintf("Backup: %d updated, %d unchanged, %d removed, pushed",
+				msg.filesUpdated, msg.filesSkipped, msg.filesRemoved)
 		}
 		return m, nil
 
@@ -376,7 +384,13 @@ func (m *Model) doCopy() tea.Cmd {
 			return CopyDoneMsg{err: err}
 		}
 
-		return CopyDoneMsg{copied: len(result.Copied), skipped: len(result.Skipped)}
+		return CopyDoneMsg{
+			copied:       len(result.Copied),
+			skipped:      len(result.Skipped),
+			filesUpdated: result.FilesUpdated,
+			filesSkipped: result.FilesSkipped,
+			filesRemoved: result.FilesRemoved,
+		}
 	}
 }
 
@@ -469,7 +483,13 @@ func (m *Model) doBackup() tea.Cmd {
 			return BackupDoneMsg{err: fmt.Errorf("copied but push failed: %w", err)}
 		}
 
-		return BackupDoneMsg{copied: len(result.Copied), skipped: len(result.Skipped)}
+		return BackupDoneMsg{
+			copied:       len(result.Copied),
+			skipped:      len(result.Skipped),
+			filesUpdated: result.FilesUpdated,
+			filesSkipped: result.FilesSkipped,
+			filesRemoved: result.FilesRemoved,
+		}
 	}
 }
 
