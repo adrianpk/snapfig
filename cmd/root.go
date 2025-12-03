@@ -2,9 +2,11 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/adrianpk/snapfig/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -53,4 +55,19 @@ func initConfig() {
 	viper.SetConfigType("yaml")
 
 	viper.ReadInConfig()
+}
+
+// loadConfig loads the configuration from the default location.
+func loadConfig() (*config.Config, error) {
+	configDir, err := config.DefaultConfigDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get config directory: %w", err)
+	}
+	configPath := filepath.Join(configDir, "config.yml")
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
+	}
+	return cfg, nil
 }

@@ -35,7 +35,7 @@ func NewRestorer(cfg *config.Config) (*Restorer, error) {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	vaultDir, err := config.DefaultVaultDir()
+	vaultDir, err := cfg.VaultDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get vault directory: %w", err)
 	}

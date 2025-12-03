@@ -19,16 +19,26 @@ func init() {
 }
 
 func runPush(cmd *cobra.Command, args []string) error {
-	hasRemote, url, err := snapfig.HasRemote()
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+
+	vaultDir, err := cfg.VaultDir()
+	if err != nil {
+		return err
+	}
+
+	hasRemote, url, err := snapfig.HasRemote(vaultDir)
 	if err != nil {
 		return err
 	}
 	if !hasRemote {
-		return fmt.Errorf("no remote configured. Run: cd ~/.snapfig/vault && git remote add origin <url>")
+		return fmt.Errorf("no remote configured. Run: cd %s && git remote add origin <url>", vaultDir)
 	}
 
 	fmt.Printf("Pushing to %s...\n", url)
-	if err := snapfig.PushVault(); err != nil {
+	if err := snapfig.PushVault(vaultDir); err != nil {
 		return err
 	}
 
