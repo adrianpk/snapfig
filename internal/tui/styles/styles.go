@@ -48,6 +48,7 @@ const (
 	CheckedBox   = "[x]"
 	UncheckedBox = "[ ]"
 	GitBox       = "[g]"
+	RestoreBox   = "[r]"
 	CursorChar   = ">"
 	NoCursor     = " "
 )
