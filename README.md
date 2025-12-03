@@ -90,7 +90,47 @@ snapfig restore         # Restore from vault
 snapfig daemon start    # Start background runner
 snapfig daemon stop     # Stop background runner
 snapfig daemon status   # Show background runner status
+snapfig setup           # Fire-and-forget setup (see below)
 ```
+
+## Fire-and-Forget Setup
+
+For automation scripts or quick setup without using the TUI:
+
+```bash
+snapfig setup \
+  --paths=".config/nvim:g,.config/i3:x,.zshrc:x" \
+  --remote="git@github.com:user/vault.git" \
+  --copy-interval="1h" \
+  --push-interval="24h"
+```
+
+This command:
+1. Creates `~/.config/snapfig/config.yml` with the specified settings
+2. Runs an initial copy to vault
+3. Configures the git remote
+4. Starts the daemon
+
+### Path format
+
+Paths use the format `path:mode` where mode is:
+- `x` = remove `.git` directories (default if omitted)
+- `g` = preserve `.git` as `.git_disabled`
+
+### Available flags
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--paths` | Paths to watch (required) | - |
+| `--remote` | Git remote URL | - |
+| `--copy-interval` | Copy interval | `1h` |
+| `--push-interval` | Push interval | `24h` |
+| `--pull-interval` | Pull interval | disabled |
+| `--auto-restore` | Auto restore after pull | `false` |
+| `--no-daemon` | Don't start daemon | `false` |
+| `--force` | Overwrite existing config | `false` |
+
+After setup completes, instructions for daemon persistence (shell rc or systemd) are printed.
 
 ## How it handles git
 
@@ -190,6 +230,7 @@ Paths are relative to home directory. See [Background Runner](#background-runner
 - ~~Smart copy: copy only updated files within directories instead of replicating entire directory structures.~~
 - ~~Selective restore: Allow restoring only specific dotfiles instead of restoring everything.~~
 - ~~Background runner for periodic snapshots.~~
+- ~~Implement fire-and-forget setup command for automated config and start.~~
 - Alternative vault location: allow configuring a custom vault path (e.g. external drive, network share) for additional redundancy or local-only backups.
 - Improve and polish the interface.
 - Token-based authentication for git cloud services.

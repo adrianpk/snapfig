@@ -161,7 +161,7 @@ func runDaemonForeground(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	d, err := daemon.New(cfg)
+	d, err := daemon.New(cfg, configPath)
 	if err != nil {
 		return err
 	}

@@ -16,6 +16,7 @@ import (
 // Daemon manages scheduled backup operations.
 type Daemon struct {
 	cfg          *config.Config
+	configPath   string
 	copyInterval time.Duration
 	pushInterval time.Duration
 	pullInterval time.Duration
@@ -23,38 +24,84 @@ type Daemon struct {
 }
 
 // New creates a new Daemon instance.
-func New(cfg *config.Config) (*Daemon, error) {
+func New(cfg *config.Config, configPath string) (*Daemon, error) {
 	d := &Daemon{
-		cfg:    cfg,
-		logger: log.New(os.Stdout, "[snapfig] ", log.LstdFlags),
+		cfg:        cfg,
+		configPath: configPath,
+		logger:     log.New(os.Stdout, "[snapfig] ", log.LstdFlags),
 	}
 
-	// Parse intervals
-	if cfg.Daemon.CopyInterval != "" {
-		dur, err := time.ParseDuration(cfg.Daemon.CopyInterval)
+	if err := d.parseIntervals(); err != nil {
+		return nil, err
+	}
+
+	return d, nil
+}
+
+// parseIntervals parses duration strings from config.
+func (d *Daemon) parseIntervals() error {
+	d.copyInterval = 0
+	d.pushInterval = 0
+	d.pullInterval = 0
+
+	if d.cfg.Daemon.CopyInterval != "" {
+		dur, err := time.ParseDuration(d.cfg.Daemon.CopyInterval)
 		if err != nil {
-			return nil, fmt.Errorf("invalid copy_interval: %w", err)
+			return fmt.Errorf("invalid copy_interval: %w", err)
 		}
 		d.copyInterval = dur
 	}
 
-	if cfg.Daemon.PushInterval != "" {
-		dur, err := time.ParseDuration(cfg.Daemon.PushInterval)
+	if d.cfg.Daemon.PushInterval != "" {
+		dur, err := time.ParseDuration(d.cfg.Daemon.PushInterval)
 		if err != nil {
-			return nil, fmt.Errorf("invalid push_interval: %w", err)
+			return fmt.Errorf("invalid push_interval: %w", err)
 		}
 		d.pushInterval = dur
 	}
 
-	if cfg.Daemon.PullInterval != "" {
-		dur, err := time.ParseDuration(cfg.Daemon.PullInterval)
+	if d.cfg.Daemon.PullInterval != "" {
+		dur, err := time.ParseDuration(d.cfg.Daemon.PullInterval)
 		if err != nil {
-			return nil, fmt.Errorf("invalid pull_interval: %w", err)
+			return fmt.Errorf("invalid pull_interval: %w", err)
 		}
 		d.pullInterval = dur
 	}
 
-	return d, nil
+	return nil
+}
+
+// reloadConfig reloads configuration from file.
+func (d *Daemon) reloadConfig() bool {
+	newCfg, err := config.Load(d.configPath)
+	if err != nil {
+		d.logger.Printf("Config reload error: %v", err)
+		return false
+	}
+
+	// Check if intervals changed
+	oldCopy := d.cfg.Daemon.CopyInterval
+	oldPush := d.cfg.Daemon.PushInterval
+	oldPull := d.cfg.Daemon.PullInterval
+
+	d.cfg = newCfg
+	if err := d.parseIntervals(); err != nil {
+		d.logger.Printf("Config reload error: %v", err)
+		return false
+	}
+
+	changed := oldCopy != newCfg.Daemon.CopyInterval ||
+		oldPush != newCfg.Daemon.PushInterval ||
+		oldPull != newCfg.Daemon.PullInterval
+
+	if changed {
+		d.logger.Println("Config reloaded, intervals updated")
+		d.logger.Printf("  Copy interval: %v", d.copyInterval)
+		d.logger.Printf("  Push interval: %v", d.pushInterval)
+		d.logger.Printf("  Pull interval: %v", d.pullInterval)
+	}
+
+	return changed
 }
 
 // Run starts the daemon loop.
@@ -120,6 +167,9 @@ func (d *Daemon) Run() error {
 }
 
 func (d *Daemon) doCopy() {
+	// Reload config to pick up any changes
+	d.reloadConfig()
+
 	d.logger.Println("Copy started")
 
 	copier, err := snapfig.NewCopier(d.cfg)
