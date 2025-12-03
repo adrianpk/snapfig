@@ -48,6 +48,7 @@ snapfig tui
 | `F3` | Push to remote |
 | `F4` | Pull from remote (clones if vault doesn't exist) |
 | `F5` | Restore from vault |
+| `F6` | **Selective restore** (choose specific files to restore) |
 | `F7` | **Backup** (Copy + Push in one step) |
 | `F8` | **Sync** (Pull + Restore in one step) |
 | `F9` | Settings (configure remote URL) |
@@ -138,7 +139,7 @@ Paths are relative to home directory.
 ## Planned Improvements
 
 - ~~Smart copy: copy only updated files within directories instead of replicating entire directory structures.~~
-- Selective restore: Allow restoring only specific dotfiles instead of restoring everything.
+- ~~Selective restore: Allow restoring only specific dotfiles instead of restoring everything.~~
 - Improve and polish the interface.
 - Background job for periodic snapshots.
 - Token-based authentication for git cloud services.

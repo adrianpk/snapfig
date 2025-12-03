@@ -18,20 +18,22 @@ type screen int
 const (
 	screenPicker screen = iota
 	screenSettings
+	screenRestorePicker
 )
 
 // Model is the root TUI model that manages screen navigation.
 type Model struct {
-	current    screen
-	picker     screens.PickerModel
-	settings   screens.SettingsModel
-	cfg        *config.Config
-	configPath string
-	width      int
-	height     int
-	status     string
-	busy       bool
-	demoMode   bool
+	current       screen
+	picker        screens.PickerModel
+	settings      screens.SettingsModel
+	restorePicker screens.RestorePickerModel
+	cfg           *config.Config
+	configPath    string
+	width         int
+	height        int
+	status        string
+	busy          bool
+	demoMode      bool
 }
 
 // CopyDoneMsg is sent when copy operation completes.
@@ -77,6 +79,14 @@ type BackupDoneMsg struct {
 type SyncDoneMsg struct {
 	err      error
 	cloned   bool
+	restored int
+	backups  int
+	skipped  int
+}
+
+// SelectiveRestoreDoneMsg is sent when selective restore completes.
+type SelectiveRestoreDoneMsg struct {
+	err      error
 	restored int
 	backups  int
 	skipped  int
@@ -170,6 +180,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case SelectiveRestoreDoneMsg:
+		m.busy = false
+		m.current = screenPicker
+		if msg.err != nil {
+			m.status = fmt.Sprintf("Error: %v", msg.err)
+		} else {
+			m.status = fmt.Sprintf("Restored %d paths (%d backed up, %d skipped)", msg.restored, msg.backups, msg.skipped)
+		}
+		return m, nil
+
+	case screens.RestorePickerInitMsg:
+		// Pass to restore picker
+		updated, cmd := m.restorePicker.Update(msg)
+		m.restorePicker = updated.(screens.RestorePickerModel)
+		return m, cmd
+
 	case tea.KeyMsg:
 		// Global keys
 		switch msg.String() {
@@ -217,6 +243,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.doSync()
 			}
 			return m, nil
+		case "f6":
+			if !m.busy && m.current == screenPicker {
+				if len(m.cfg.Watching) == 0 {
+					m.status = "No paths configured"
+					return m, nil
+				}
+				m.restorePicker = screens.NewRestorePicker()
+				m.current = screenRestorePicker
+				m.status = "Loading vault contents..."
+				return m, m.initRestorePicker()
+			}
+			return m, nil
 		case "f9":
 			if !m.busy && m.current == screenPicker {
 				m.settings = screens.NewSettings(m.cfg.Remote)
@@ -232,6 +270,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screenPicker:
 		updated, cmd := m.picker.Update(msg)
 		m.picker = updated.(screens.PickerModel)
+		return m, cmd
+
+	case screenRestorePicker:
+		updated, cmd := m.restorePicker.Update(msg)
+		m.restorePicker = updated.(screens.RestorePickerModel)
+
+		// Check for Esc
+		if m.restorePicker.WasCanceled() {
+			m.current = screenPicker
+			m.status = ""
+			return m, nil
+		}
+
+		// Check for Enter (confirm restore)
+		if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "enter" && m.restorePicker.Loaded() {
+			selected := m.restorePicker.Selected()
+			if len(selected) == 0 {
+				m.status = "No files selected"
+				return m, nil
+			}
+			m.busy = true
+			m.status = "Restoring selected files..."
+			return m, m.doSelectiveRestore(selected)
+		}
+
 		return m, cmd
 
 	case screenSettings:
@@ -278,6 +341,8 @@ func (m Model) View() string {
 	switch m.current {
 	case screenPicker:
 		b.WriteString(m.picker.View())
+	case screenRestorePicker:
+		b.WriteString(m.restorePicker.View())
 	case screenSettings:
 		b.WriteString(m.settings.View())
 	}
@@ -320,6 +385,7 @@ func (m Model) renderActionBar() string {
 		{"F3", "Push"},
 		{"F4", "Pull"},
 		{"F5", "Restore"},
+		{"F6", "Selective"},
 		{"F7", "Backup"},
 		{"F8", "Sync"},
 		{"F9", "Settings"},
@@ -522,6 +588,40 @@ func (m *Model) doSync() tea.Cmd {
 			restored: len(restoreResult.Restored),
 			backups:  len(restoreResult.Backups),
 			skipped:  len(restoreResult.Skipped),
+		}
+	}
+}
+
+// initRestorePicker initializes the restore picker with vault entries.
+func (m *Model) initRestorePicker() tea.Cmd {
+	return func() tea.Msg {
+		restorer, err := snapfig.NewRestorer(m.cfg)
+		if err != nil {
+			return screens.RestorePickerInitMsg{Err: err}
+		}
+
+		entries, err := restorer.ListVaultEntries()
+		return screens.RestorePickerInitMsg{Entries: entries, Err: err}
+	}
+}
+
+// doSelectiveRestore restores only the selected paths.
+func (m *Model) doSelectiveRestore(paths []string) tea.Cmd {
+	return func() tea.Msg {
+		restorer, err := snapfig.NewRestorer(m.cfg)
+		if err != nil {
+			return SelectiveRestoreDoneMsg{err: err}
+		}
+
+		result, err := restorer.RestoreSelective(paths)
+		if err != nil {
+			return SelectiveRestoreDoneMsg{err: err}
+		}
+
+		return SelectiveRestoreDoneMsg{
+			restored: len(result.Restored),
+			backups:  len(result.Backups),
+			skipped:  len(result.Skipped),
 		}
 	}
 }
