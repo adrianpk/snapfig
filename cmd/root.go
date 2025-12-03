@@ -16,6 +16,10 @@ var rootCmd = &cobra.Command{
 	Short: "A tool for managing and versioning configuration files",
 	Long: `Snapfig observes directories and replicates their contents
 into a versioned store without requiring symlinks.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Default to TUI when no subcommand is specified
+		return tuiCmd.RunE(cmd, args)
+	},
 }
 
 // Execute runs the root command.

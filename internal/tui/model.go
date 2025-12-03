@@ -48,10 +48,12 @@ type CopyDoneMsg struct {
 
 // RestoreDoneMsg is sent when restore operation completes.
 type RestoreDoneMsg struct {
-	err      error
-	restored int
-	backups  int
-	skipped  int
+	err          error
+	restored     int
+	backups      int
+	skipped      int
+	filesUpdated int
+	filesSkipped int
 }
 
 // PushDoneMsg is sent when push operation completes.
@@ -77,19 +79,23 @@ type BackupDoneMsg struct {
 
 // SyncDoneMsg is sent when sync (pull+restore) completes.
 type SyncDoneMsg struct {
-	err      error
-	cloned   bool
-	restored int
-	backups  int
-	skipped  int
+	err          error
+	cloned       bool
+	restored     int
+	backups      int
+	skipped      int
+	filesUpdated int
+	filesSkipped int
 }
 
 // SelectiveRestoreDoneMsg is sent when selective restore completes.
 type SelectiveRestoreDoneMsg struct {
-	err      error
-	restored int
-	backups  int
-	skipped  int
+	err          error
+	restored     int
+	backups      int
+	skipped      int
+	filesUpdated int
+	filesSkipped int
 }
 
 // New creates a new root TUI model.
@@ -133,7 +139,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.status = fmt.Sprintf("Error: %v", msg.err)
 		} else {
-			m.status = fmt.Sprintf("Restored %d paths (%d backed up, %d skipped)", msg.restored, msg.backups, msg.skipped)
+			m.status = fmt.Sprintf("Restored: %d updated, %d unchanged",
+				msg.filesUpdated, msg.filesSkipped)
 		}
 		return m, nil
 
@@ -176,7 +183,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.cloned {
 				action = "cloned"
 			}
-			m.status = fmt.Sprintf("Sync complete: %s, %d restored", action, msg.restored)
+			m.status = fmt.Sprintf("Sync: %s, %d updated, %d unchanged",
+				action, msg.filesUpdated, msg.filesSkipped)
 		}
 		return m, nil
 
@@ -186,7 +194,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.status = fmt.Sprintf("Error: %v", msg.err)
 		} else {
-			m.status = fmt.Sprintf("Restored %d paths (%d backed up, %d skipped)", msg.restored, msg.backups, msg.skipped)
+			m.status = fmt.Sprintf("Restored: %d updated, %d unchanged",
+				msg.filesUpdated, msg.filesSkipped)
 		}
 		return m, nil
 
@@ -478,9 +487,11 @@ func (m *Model) doRestore() tea.Cmd {
 		}
 
 		return RestoreDoneMsg{
-			restored: len(result.Restored),
-			backups:  len(result.Backups),
-			skipped:  len(result.Skipped),
+			restored:     len(result.Restored),
+			backups:      len(result.Backups),
+			skipped:      len(result.Skipped),
+			filesUpdated: result.FilesUpdated,
+			filesSkipped: result.FilesSkipped,
 		}
 	}
 }
@@ -584,10 +595,12 @@ func (m *Model) doSync() tea.Cmd {
 		}
 
 		return SyncDoneMsg{
-			cloned:   pullResult.Cloned,
-			restored: len(restoreResult.Restored),
-			backups:  len(restoreResult.Backups),
-			skipped:  len(restoreResult.Skipped),
+			cloned:       pullResult.Cloned,
+			restored:     len(restoreResult.Restored),
+			backups:      len(restoreResult.Backups),
+			skipped:      len(restoreResult.Skipped),
+			filesUpdated: restoreResult.FilesUpdated,
+			filesSkipped: restoreResult.FilesSkipped,
 		}
 	}
 }
@@ -619,9 +632,11 @@ func (m *Model) doSelectiveRestore(paths []string) tea.Cmd {
 		}
 
 		return SelectiveRestoreDoneMsg{
-			restored: len(result.Restored),
-			backups:  len(result.Backups),
-			skipped:  len(result.Skipped),
+			restored:     len(result.Restored),
+			backups:      len(result.Backups),
+			skipped:      len(result.Skipped),
+			filesUpdated: result.FilesUpdated,
+			filesSkipped: result.FilesSkipped,
 		}
 	}
 }
