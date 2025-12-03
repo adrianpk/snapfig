@@ -64,7 +64,7 @@ snapfig
 
 ### On your main machine
 
-1. `snapfig` or `snapfig tui`
+1. `snapfig`
 2. Select your config directories
 3. `F9` → enter your git remote URL
 4. `F7` → backs up and pushes
@@ -72,7 +72,7 @@ snapfig
 ### On a new machine
 
 1. Copy your `~/.config/snapfig/config.yml` (or just set the remote via F9)
-2. `snapfig tui`
+2. `snapfig`
 3. `F8` → clones vault and restores everything
 
 ### Regular backups
@@ -103,15 +103,53 @@ Original directories are never modified.
 
 ## Background Runner
 
-The daemon runs scheduled backups in the background:
+The daemon runs scheduled backups in the background without manual intervention.
+
+### Commands
 
 ```bash
-snapfig daemon start    # Start (logs to ~/.snapfig/daemon.log)
-snapfig daemon status   # Check if running
-snapfig daemon stop     # Stop
+snapfig daemon start    # Start daemon
+snapfig daemon status   # Check if running and show config
+snapfig daemon stop     # Stop daemon
 ```
 
-Configure intervals in Settings (F9) or directly in `config.yml`. The daemon uses smart copy, so only changed files are copied.
+### Configuration
+
+Configure via **Settings (F9)** in the TUI, or edit `~/.config/snapfig/config.yml` directly:
+
+```yaml
+daemon:
+  copy_interval: 1h      # How often to copy to vault
+  push_interval: 24h     # How often to push to remote
+  pull_interval: ""      # How often to pull from remote (empty = disabled)
+  auto_restore: false    # Automatically restore after pull
+```
+
+### Parameters
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `copy_interval` | Runs smart copy at this interval. Only changed files are copied. | `30m`, `1h`, `2h` |
+| `push_interval` | Pushes vault to remote at this interval. Requires `remote` to be configured. | `12h`, `24h` |
+| `pull_interval` | Pulls from remote at this interval. **Disabled by default** - enable with caution on multi-machine setups. | `24h` |
+| `auto_restore` | When `true`, automatically restores files after a pull. **Use carefully** - could overwrite local changes. | `true`, `false` |
+
+Intervals use Go duration format: `s` (seconds), `m` (minutes), `h` (hours). Examples: `30s`, `15m`, `1h`, `24h`.
+
+### Logs
+
+Activity is logged to `~/.snapfig/daemon.log`:
+
+```bash
+tail -f ~/.snapfig/daemon.log
+```
+
+Example output:
+```
+[snapfig] 2025/12/03 11:33:40 Copy started
+[snapfig] 2025/12/03 11:33:40 Copy done: 1 paths, 2 updated, 3 unchanged, 0 removed
+[snapfig] 2025/12/03 11:33:40   copied: .config/nvim
+```
 
 ## Files
 
@@ -141,19 +179,18 @@ watching:
     enabled: true
 
 daemon:
-  copy_interval: 1h      # Smart copy every hour
-  push_interval: 24h     # Push to remote daily
-  pull_interval: ""      # Disabled by default
-  auto_restore: false    # Auto restore after pull
+  copy_interval: 1h
+  push_interval: 24h
 ```
 
-Paths are relative to home directory. Intervals use Go duration format (e.g. `30m`, `1h`, `24h`).
+Paths are relative to home directory. See [Background Runner](#background-runner) for all daemon options.
 
 ## Planned Improvements
 
 - ~~Smart copy: copy only updated files within directories instead of replicating entire directory structures.~~
 - ~~Selective restore: Allow restoring only specific dotfiles instead of restoring everything.~~
 - ~~Background runner for periodic snapshots.~~
+- Alternative vault location: allow configuring a custom vault path (e.g. external drive, network share) for additional redundancy or local-only backups.
 - Improve and polish the interface.
 - Token-based authentication for git cloud services.
 - Add automated tests.
