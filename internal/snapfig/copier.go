@@ -43,12 +43,12 @@ func NewCopier(cfg *config.Config) (*Copier, error) {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	vaultDir, err := config.DefaultVaultDir()
+	vaultDir, err := cfg.VaultDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get vault directory: %w", err)
 	}
 
-	snapfigDir := filepath.Dir(vaultDir) // ~/.snapfig
+	snapfigDir := filepath.Dir(vaultDir)
 
 	return &Copier{
 		cfg:        cfg,
@@ -104,12 +104,12 @@ func (c *Copier) Copy() (*CopyResult, error) {
 	}
 
 	// Initialize git repo if needed and commit
-	if err := InitVaultRepo(); err != nil {
+	if err := InitVaultRepo(c.vaultDir); err != nil {
 		// Non-fatal: git might not be installed
 		result.GitError = err
 	} else {
 		msg := fmt.Sprintf("snapfig: backup %d paths", len(result.Copied))
-		if err := CommitVault(msg); err != nil {
+		if err := CommitVault(c.vaultDir, msg); err != nil {
 			result.GitError = err
 		}
 	}

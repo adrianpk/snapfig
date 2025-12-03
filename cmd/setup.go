@@ -14,6 +14,7 @@ import (
 var (
 	setupPaths        string
 	setupRemote       string
+	setupVaultPath    string
 	setupCopyInterval string
 	setupPushInterval string
 	setupPullInterval string
@@ -40,6 +41,7 @@ Path format: path:mode where mode is:
 func init() {
 	setupCmd.Flags().StringVar(&setupPaths, "paths", "", "Paths to watch (format: path1:mode,path2:mode)")
 	setupCmd.Flags().StringVar(&setupRemote, "remote", "", "Git remote URL")
+	setupCmd.Flags().StringVar(&setupVaultPath, "vault-path", "", "Custom vault location (default: ~/.snapfig/vault)")
 	setupCmd.Flags().StringVar(&setupCopyInterval, "copy-interval", "1h", "Copy interval (e.g. 30m, 1h)")
 	setupCmd.Flags().StringVar(&setupPushInterval, "push-interval", "24h", "Push interval (e.g. 12h, 24h)")
 	setupCmd.Flags().StringVar(&setupPullInterval, "pull-interval", "", "Pull interval (empty = disabled)")
@@ -76,9 +78,10 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 	// Build config
 	cfg := &config.Config{
-		Git:      config.GitModeDisable,
-		Remote:   setupRemote,
-		Watching: watching,
+		Git:       config.GitModeDisable,
+		Remote:    setupRemote,
+		VaultPath: setupVaultPath,
+		Watching:  watching,
 		Daemon: config.DaemonConfig{
 			CopyInterval: setupCopyInterval,
 			PushInterval: setupPushInterval,
@@ -118,7 +121,10 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 	// Configure remote if provided
 	if setupRemote != "" {
-		if err := snapfig.SetRemote(setupRemote); err != nil {
+		vaultDir, err := cfg.VaultDir()
+		if err != nil {
+			fmt.Printf("Warning: failed to get vault directory: %v\n", err)
+		} else if err := snapfig.SetRemote(vaultDir, setupRemote); err != nil {
 			fmt.Printf("Warning: failed to set git remote: %v\n", err)
 		} else {
 			fmt.Printf("Remote configured: %s\n", setupRemote)

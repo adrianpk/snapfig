@@ -10,6 +10,20 @@ Backup and restore your dotfiles straight from their original locations.
 
 ---
 
+## What it is
+
+Snapfig is a backup and versioning system for configuration files (dotfiles, application settings, etc.). It was designed for both manual and automatic backups, though nothing prevents you from using it for documents or other types of files.
+
+**Why not symlinks?**
+
+Most dotfile managers use symlinks, which can break and require understanding Git workflows. Snapfig takes a different approach:
+
+- **Real redundancy**: You get actual copies of your files in the vault, not just links. If something goes wrong with your originals, you have a real backup to restore from.
+
+- **Automated sync**: The background runner keeps your backups up to date without having to remember to commit and push. You can also configure an alternative vault location on a different drive for extra redundancy.
+
+- **Storage is not an issue**: Modern hard drives are huge, and configuration files are tiny compared to media or photos. Having real copies wastes essentially no space.
+
 ## What it does
 
 Snapfig copies your configuration files to a local vault (`~/.snapfig/vault/`) that's automatically versioned with git. Unlike tools that use symlinks, you keep working with your files in their original locations. Snapfig mirrors them when you ask.
@@ -123,6 +137,7 @@ Paths use the format `path:mode` where mode is:
 |------|-------------|---------|
 | `--paths` | Paths to watch (required) | - |
 | `--remote` | Git remote URL | - |
+| `--vault-path` | Custom vault location | `~/.snapfig/vault` |
 | `--copy-interval` | Copy interval | `1h` |
 | `--push-interval` | Push interval | `24h` |
 | `--pull-interval` | Pull interval | disabled |
@@ -191,6 +206,35 @@ Example output:
 [snapfig] 2025/12/03 11:33:40   copied: .config/nvim
 ```
 
+## Alternative Vault Location
+
+By default, the vault is stored at `~/.snapfig/vault`. You can configure a custom location for:
+- External drives for additional redundancy
+- Network shares for centralized backups
+- Any other location you prefer
+
+### Configure via TUI
+
+1. Press `F9` to open Settings
+2. Enter your custom path in "Vault location"
+3. Press Enter to save
+
+### Configure via setup command
+
+```bash
+snapfig setup \
+  --paths=".config/nvim:g,.zshrc:x" \
+  --vault-path="/mnt/backup/dotfiles"
+```
+
+### Configure via config file
+
+```yaml
+vault_path: /mnt/external/dotfiles-vault
+```
+
+The path can be absolute or start with `~` for home directory expansion.
+
 ## Files
 
 ```
@@ -209,6 +253,7 @@ Example output:
 ```yaml
 git: disable
 remote: git@github.com:user/dotfiles.git
+vault_path: ""  # optional: custom vault location
 
 watching:
   - path: .config/nvim
@@ -223,7 +268,7 @@ daemon:
   push_interval: 24h
 ```
 
-Paths are relative to home directory. See [Background Runner](#background-runner) for all daemon options.
+Paths are relative to home directory. See [Background Runner](#background-runner) for all daemon options and [Alternative Vault Location](#alternative-vault-location) for custom vault paths.
 
 ## Planned Improvements
 
@@ -231,7 +276,7 @@ Paths are relative to home directory. See [Background Runner](#background-runner
 - ~~Selective restore: Allow restoring only specific dotfiles instead of restoring everything.~~
 - ~~Background runner for periodic snapshots.~~
 - ~~Implement fire-and-forget setup command for automated config and start.~~
-- Alternative vault location: allow configuring a custom vault path (e.g. external drive, network share) for additional redundancy or local-only backups.
+- ~~Alternative vault location: allow configuring a custom vault path (e.g. external drive, network share) for additional redundancy or local-only backups.~~
 - Improve and polish the interface.
 - Token-based authentication for git cloud services.
 - Add automated tests.

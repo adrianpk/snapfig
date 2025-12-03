@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"path/filepath"
 
-	"github.com/adrianpk/snapfig/internal/config"
 	"github.com/adrianpk/snapfig/internal/snapfig"
 	"github.com/spf13/cobra"
 )
@@ -12,7 +10,7 @@ import (
 var copyCmd = &cobra.Command{
 	Use:   "copy",
 	Short: "Copy watched paths to the vault",
-	Long:  "Copies all enabled watched paths from the config to ~/.snapfig/vault/, handling .git directories according to the configured mode.",
+	Long:  "Copies all enabled watched paths from the config to the vault, handling .git directories according to the configured mode.",
 	RunE:  runCopy,
 }
 
@@ -21,19 +19,13 @@ func init() {
 }
 
 func runCopy(cmd *cobra.Command, args []string) error {
-	configDir, err := config.DefaultConfigDir()
+	cfg, err := loadConfig()
 	if err != nil {
-		return fmt.Errorf("failed to get config directory: %w", err)
-	}
-	configPath := filepath.Join(configDir, "config.yml")
-
-	cfg, err := config.Load(configPath)
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
 
 	if len(cfg.Watching) == 0 {
-		fmt.Println("No paths configured. Run 'snapfig tui' to select paths.")
+		fmt.Println("No paths configured. Run 'snapfig' to select paths.")
 		return nil
 	}
 
@@ -55,7 +47,7 @@ func runCopy(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Skipped: %s (not found)\n", p)
 	}
 
-	vaultDir, _ := config.DefaultVaultDir()
+	vaultDir, _ := cfg.VaultDir()
 	fmt.Printf("\nDone. %d copied, %d skipped. Vault: %s\n", len(result.Copied), len(result.Skipped), vaultDir)
 	return nil
 }

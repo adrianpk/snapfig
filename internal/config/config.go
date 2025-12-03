@@ -27,10 +27,11 @@ type DaemonConfig struct {
 
 // Config represents the main Snapfig configuration.
 type Config struct {
-	Git      GitMode      `yaml:"git"`
-	Remote   string       `yaml:"remote,omitempty"`
-	Watching []Watched    `yaml:"watching"`
-	Daemon   DaemonConfig `yaml:"daemon,omitempty"`
+	Git       GitMode      `yaml:"git"`
+	Remote    string       `yaml:"remote,omitempty"`
+	VaultPath string       `yaml:"vault_path,omitempty"` // custom vault location
+	Watching  []Watched    `yaml:"watching"`
+	Daemon    DaemonConfig `yaml:"daemon,omitempty"`
 }
 
 // Watched represents a directory being observed by Snapfig.
@@ -134,4 +135,29 @@ func (w *Watched) EffectiveGitMode(global GitMode) GitMode {
 		return w.Git
 	}
 	return global
+}
+
+// VaultDir returns the vault directory path, using custom path if set.
+func (c *Config) VaultDir() (string, error) {
+	if c.VaultPath != "" {
+		// Expand ~ if present
+		if len(c.VaultPath) > 0 && c.VaultPath[0] == '~' {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return "", err
+			}
+			return filepath.Join(home, c.VaultPath[1:]), nil
+		}
+		return c.VaultPath, nil
+	}
+	return DefaultVaultDir()
+}
+
+// SnapfigDir returns the base snapfig directory (parent of vault).
+func (c *Config) SnapfigDir() (string, error) {
+	vaultDir, err := c.VaultDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Dir(vaultDir), nil
 }
