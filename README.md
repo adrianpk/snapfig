@@ -31,7 +31,7 @@ go build -o snapfig .
 ## Quick start
 
 ```bash
-snapfig tui
+snapfig
 ```
 
 1. Navigate with arrow keys or `j/k`
@@ -51,7 +51,7 @@ snapfig tui
 | `F6` | **Selective restore** (choose specific files to restore) |
 | `F7` | **Backup** (Copy + Push in one step) |
 | `F8` | **Sync** (Pull + Restore in one step) |
-| `F9` | Settings (configure remote URL) |
+| `F9` | Settings (remote URL, background runner intervals) |
 | `F10` | Quit |
 
 ### Selection modes
@@ -64,7 +64,7 @@ snapfig tui
 
 ### On your main machine
 
-1. `snapfig tui`
+1. `snapfig` or `snapfig tui`
 2. Select your config directories
 3. `F9` → enter your git remote URL
 4. `F7` → backs up and pushes
@@ -82,11 +82,14 @@ Just press `F7`. It copies changes and pushes to remote.
 ## CLI Commands
 
 ```bash
-snapfig tui       # Interactive interface
-snapfig copy      # Copy to vault
-snapfig push      # Push to remote
-snapfig pull      # Pull from remote (clones if needed)
-snapfig restore   # Restore from vault
+snapfig                 # Interactive interface (default)
+snapfig copy            # Copy to vault
+snapfig push            # Push to remote
+snapfig pull            # Pull from remote (clones if needed)
+snapfig restore         # Restore from vault
+snapfig daemon start    # Start background runner
+snapfig daemon stop     # Stop background runner
+snapfig daemon status   # Show background runner status
 ```
 
 ## How it handles git
@@ -98,26 +101,30 @@ Many config directories (nvim, doom emacs, etc.) are git repos themselves. Snapf
 
 Original directories are never modified.
 
+## Background Runner
+
+The daemon runs scheduled backups in the background:
+
+```bash
+snapfig daemon start    # Start (logs to ~/.snapfig/daemon.log)
+snapfig daemon status   # Check if running
+snapfig daemon stop     # Stop
+```
+
+Configure intervals in Settings (F9) or directly in `config.yml`. The daemon uses smart copy, so only changed files are copied.
+
 ## Files
 
 ```
 ~/.config/snapfig/
-└── config.yml          # Configuration (paths to watch, remote URL)
+└── config.yml          # Configuration (paths to watch, remote URL, daemon settings)
 
 ~/.snapfig/
 ├── vault/              # Your backed up files (git repo)
-└── manifest.md         # Summary of what's backed up
+├── manifest.md         # Summary of what's backed up
+├── daemon.pid          # PID file when daemon is running
+└── daemon.log          # Daemon activity log
 ```
-
-## Restore safety
-
-Before overwriting existing files, Snapfig backs them up:
-
-```
-~/.config/nvim → ~/.config/nvim.202412011530.bak
-```
-
-If something goes wrong, delete the restored copy and rename the `.bak` back.
 
 ## Config format
 
@@ -132,16 +139,22 @@ watching:
   - path: .zshrc
     git: remove
     enabled: true
+
+daemon:
+  copy_interval: 1h      # Smart copy every hour
+  push_interval: 24h     # Push to remote daily
+  pull_interval: ""      # Disabled by default
+  auto_restore: false    # Auto restore after pull
 ```
 
-Paths are relative to home directory.
+Paths are relative to home directory. Intervals use Go duration format (e.g. `30m`, `1h`, `24h`).
 
 ## Planned Improvements
 
 - ~~Smart copy: copy only updated files within directories instead of replicating entire directory structures.~~
 - ~~Selective restore: Allow restoring only specific dotfiles instead of restoring everything.~~
+- ~~Background runner for periodic snapshots.~~
 - Improve and polish the interface.
-- Background job for periodic snapshots.
 - Token-based authentication for git cloud services.
 - Add automated tests.
 

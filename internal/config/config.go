@@ -17,11 +17,20 @@ const (
 	GitModeRemove  GitMode = "remove"
 )
 
+// DaemonConfig holds settings for the background runner.
+type DaemonConfig struct {
+	CopyInterval string `yaml:"copy_interval,omitempty"` // e.g. "1h", "30m"
+	PushInterval string `yaml:"push_interval,omitempty"` // e.g. "24h", "12h"
+	PullInterval string `yaml:"pull_interval,omitempty"` // disabled by default
+	AutoRestore  bool   `yaml:"auto_restore,omitempty"`  // restore after pull
+}
+
 // Config represents the main Snapfig configuration.
 type Config struct {
-	Git      GitMode   `yaml:"git"`
-	Remote   string    `yaml:"remote,omitempty"`
-	Watching []Watched `yaml:"watching"`
+	Git      GitMode      `yaml:"git"`
+	Remote   string       `yaml:"remote,omitempty"`
+	Watching []Watched    `yaml:"watching"`
+	Daemon   DaemonConfig `yaml:"daemon,omitempty"`
 }
 
 // Watched represents a directory being observed by Snapfig.
@@ -47,6 +56,33 @@ func DefaultVaultDir() (string, error) {
 		return "", err
 	}
 	return filepath.Join(home, ".snapfig", "vault"), nil
+}
+
+// DefaultSnapfigDir returns the base ~/.snapfig directory path.
+func DefaultSnapfigDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".snapfig"), nil
+}
+
+// PidFilePath returns the path to the daemon PID file.
+func PidFilePath() (string, error) {
+	dir, err := DefaultSnapfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "daemon.pid"), nil
+}
+
+// LogFilePath returns the path to the daemon log file.
+func LogFilePath() (string, error) {
+	dir, err := DefaultSnapfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "daemon.log"), nil
 }
 
 // Load reads and parses the configuration file.

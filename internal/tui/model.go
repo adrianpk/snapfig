@@ -266,7 +266,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "f9":
 			if !m.busy && m.current == screenPicker {
-				m.settings = screens.NewSettings(m.cfg.Remote)
+				m.settings = screens.NewSettings(m.cfg.Remote, m.cfg.Daemon)
 				m.current = screenSettings
 				return m, m.settings.Init()
 			}
@@ -313,6 +313,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check if user pressed Enter or Esc
 		if m.settings.WasSaved() {
 			m.cfg.Remote = m.settings.Remote()
+			m.cfg.Daemon = m.settings.DaemonConfig()
 			if err := m.cfg.Save(m.configPath); err != nil {
 				m.status = fmt.Sprintf("Error saving: %v", err)
 			} else {
