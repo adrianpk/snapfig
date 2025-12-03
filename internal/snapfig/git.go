@@ -7,17 +7,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-
-	"github.com/adrianpk/snapfig/internal/config"
 )
 
 // InitVaultRepo initializes the vault as a git repository if not already.
-func InitVaultRepo() error {
-	vaultDir, err := config.DefaultVaultDir()
-	if err != nil {
-		return err
-	}
-
+func InitVaultRepo(vaultDir string) error {
 	gitDir := filepath.Join(vaultDir, ".git")
 	if _, err := os.Stat(gitDir); err == nil {
 		// Already a git repo
@@ -34,12 +27,7 @@ func InitVaultRepo() error {
 }
 
 // CommitVault commits all changes in the vault with the given message.
-func CommitVault(message string) error {
-	vaultDir, err := config.DefaultVaultDir()
-	if err != nil {
-		return err
-	}
-
+func CommitVault(vaultDir, message string) error {
 	// Add all
 	addCmd := exec.Command("git", "add", "-A")
 	addCmd.Dir = vaultDir
@@ -62,12 +50,7 @@ func CommitVault(message string) error {
 }
 
 // HasRemote checks if the vault repo has a remote configured.
-func HasRemote() (bool, string, error) {
-	vaultDir, err := config.DefaultVaultDir()
-	if err != nil {
-		return false, "", err
-	}
-
+func HasRemote(vaultDir string) (bool, string, error) {
 	cmd := exec.Command("git", "remote", "get-url", "origin")
 	cmd.Dir = vaultDir
 	output, err := cmd.Output()
@@ -79,13 +62,8 @@ func HasRemote() (bool, string, error) {
 }
 
 // PushVault pushes the vault to the configured remote.
-func PushVault() error {
-	vaultDir, err := config.DefaultVaultDir()
-	if err != nil {
-		return err
-	}
-
-	hasRemote, _, err := HasRemote()
+func PushVault(vaultDir string) error {
+	hasRemote, _, err := HasRemote(vaultDir)
 	if err != nil {
 		return err
 	}
@@ -122,17 +100,12 @@ type PullResult struct {
 
 // PullVault pulls from the configured remote.
 // If vault doesn't exist but remoteURL is provided, it clones first.
-func PullVault() (*PullResult, error) {
-	return PullVaultWithRemote("")
+func PullVault(vaultDir string) (*PullResult, error) {
+	return PullVaultWithRemote(vaultDir, "")
 }
 
 // PullVaultWithRemote pulls from remote, cloning first if vault doesn't exist.
-func PullVaultWithRemote(remoteURL string) (*PullResult, error) {
-	vaultDir, err := config.DefaultVaultDir()
-	if err != nil {
-		return nil, err
-	}
-
+func PullVaultWithRemote(vaultDir, remoteURL string) (*PullResult, error) {
 	result := &PullResult{}
 
 	// Check if vault exists
@@ -145,7 +118,7 @@ func PullVaultWithRemote(remoteURL string) (*PullResult, error) {
 	if !vaultExists {
 		// Need to clone
 		if remoteURL == "" {
-			return nil, fmt.Errorf("vault doesn't exist. Configure remote in Settings (F6) first")
+			return nil, fmt.Errorf("vault doesn't exist. Configure remote in Settings (F9) first")
 		}
 
 		// Ensure parent directory exists
@@ -165,7 +138,7 @@ func PullVaultWithRemote(remoteURL string) (*PullResult, error) {
 	}
 
 	// Vault exists, do normal pull
-	hasRemote, _, err := HasRemote()
+	hasRemote, _, err := HasRemote(vaultDir)
 	if err != nil {
 		return nil, err
 	}
@@ -183,19 +156,14 @@ func PullVaultWithRemote(remoteURL string) (*PullResult, error) {
 }
 
 // SetRemote configures the remote origin for the vault.
-func SetRemote(url string) error {
-	vaultDir, err := config.DefaultVaultDir()
-	if err != nil {
-		return err
-	}
-
+func SetRemote(vaultDir, url string) error {
 	// Ensure vault is a git repo
-	if err := InitVaultRepo(); err != nil {
+	if err := InitVaultRepo(vaultDir); err != nil {
 		return err
 	}
 
 	// Check if origin already exists
-	hasRemote, currentURL, err := HasRemote()
+	hasRemote, currentURL, err := HasRemote(vaultDir)
 	if err != nil {
 		return err
 	}

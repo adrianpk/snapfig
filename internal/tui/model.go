@@ -29,6 +29,7 @@ type Model struct {
 	restorePicker screens.RestorePickerModel
 	cfg           *config.Config
 	configPath    string
+	vaultDir      string
 	width         int
 	height        int
 	status        string
@@ -100,11 +101,13 @@ type SelectiveRestoreDoneMsg struct {
 
 // New creates a new root TUI model.
 func New(cfg *config.Config, configPath string, demoMode bool) Model {
+	vaultDir, _ := cfg.VaultDir()
 	return Model{
 		current:    screenPicker,
 		picker:     screens.NewPicker(cfg, demoMode),
 		cfg:        cfg,
 		configPath: configPath,
+		vaultDir:   vaultDir,
 		demoMode:   demoMode,
 	}
 }
@@ -266,7 +269,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "f9":
 			if !m.busy && m.current == screenPicker {
-				m.settings = screens.NewSettings(m.cfg.Remote, m.cfg.Daemon)
+				m.settings = screens.NewSettings(m.cfg.Remote, m.cfg.VaultPath, m.cfg.Daemon)
 				m.current = screenSettings
 				return m, m.settings.Init()
 			}
@@ -313,13 +316,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check if user pressed Enter or Esc
 		if m.settings.WasSaved() {
 			m.cfg.Remote = m.settings.Remote()
+			m.cfg.VaultPath = m.settings.VaultPath()
 			m.cfg.Daemon = m.settings.DaemonConfig()
+
+			// Update vaultDir if vault path changed
+			if newVaultDir, err := m.cfg.VaultDir(); err == nil {
+				m.vaultDir = newVaultDir
+			}
+
 			if err := m.cfg.Save(m.configPath); err != nil {
 				m.status = fmt.Sprintf("Error saving: %v", err)
 			} else {
 				// Configure git remote
 				if m.cfg.Remote != "" {
-					if err := snapfig.SetRemote(m.cfg.Remote); err != nil {
+					if err := snapfig.SetRemote(m.vaultDir, m.cfg.Remote); err != nil {
 						m.status = fmt.Sprintf("Saved config, but git remote failed: %v", err)
 					} else {
 						m.status = "Settings saved"
@@ -499,8 +509,9 @@ func (m *Model) doRestore() tea.Cmd {
 
 // doPush pushes vault to remote.
 func (m *Model) doPush() tea.Cmd {
+	vaultDir := m.vaultDir
 	return func() tea.Msg {
-		if err := snapfig.PushVault(); err != nil {
+		if err := snapfig.PushVault(vaultDir); err != nil {
 			return PushDoneMsg{err: err}
 		}
 		return PushDoneMsg{}
@@ -509,8 +520,10 @@ func (m *Model) doPush() tea.Cmd {
 
 // doPull pulls vault from remote, cloning if needed.
 func (m *Model) doPull() tea.Cmd {
+	vaultDir := m.vaultDir
+	remote := m.cfg.Remote
 	return func() tea.Msg {
-		result, err := snapfig.PullVaultWithRemote(m.cfg.Remote)
+		result, err := snapfig.PullVaultWithRemote(vaultDir, remote)
 		if err != nil {
 			return PullDoneMsg{err: err}
 		}
@@ -520,20 +533,23 @@ func (m *Model) doPull() tea.Cmd {
 
 // doBackup performs copy + push in one step.
 func (m *Model) doBackup() tea.Cmd {
+	vaultDir := m.vaultDir
+	selected := m.picker.Selected()
+	cfg := m.cfg
+	configPath := m.configPath
 	return func() tea.Msg {
 		// First, do the copy
-		selected := m.picker.Selected()
 		if len(selected) == 0 {
 			return BackupDoneMsg{err: fmt.Errorf("no paths selected")}
 		}
 
-		m.cfg.Watching = make([]config.Watched, 0, len(selected))
+		cfg.Watching = make([]config.Watched, 0, len(selected))
 		for _, sel := range selected {
 			gitMode := config.GitModeRemove
 			if sel.GitMode == screens.StateDisable {
 				gitMode = config.GitModeDisable
 			}
-			m.cfg.Watching = append(m.cfg.Watching, config.Watched{
+			cfg.Watching = append(cfg.Watching, config.Watched{
 				Path:    sel.Path,
 				Git:     gitMode,
 				Enabled: true,
@@ -541,12 +557,12 @@ func (m *Model) doBackup() tea.Cmd {
 		}
 
 		// Save config
-		if err := m.cfg.Save(m.configPath); err != nil {
+		if err := cfg.Save(configPath); err != nil {
 			return BackupDoneMsg{err: err}
 		}
 
 		// Copy to vault
-		copier, err := snapfig.NewCopier(m.cfg)
+		copier, err := snapfig.NewCopier(cfg)
 		if err != nil {
 			return BackupDoneMsg{err: err}
 		}
@@ -557,7 +573,7 @@ func (m *Model) doBackup() tea.Cmd {
 		}
 
 		// Push
-		if err := snapfig.PushVault(); err != nil {
+		if err := snapfig.PushVault(vaultDir); err != nil {
 			return BackupDoneMsg{err: fmt.Errorf("copied but push failed: %w", err)}
 		}
 
@@ -573,19 +589,22 @@ func (m *Model) doBackup() tea.Cmd {
 
 // doSync performs pull + restore in one step.
 func (m *Model) doSync() tea.Cmd {
+	vaultDir := m.vaultDir
+	remote := m.cfg.Remote
+	cfg := m.cfg
 	return func() tea.Msg {
 		// First, pull (or clone)
-		pullResult, err := snapfig.PullVaultWithRemote(m.cfg.Remote)
+		pullResult, err := snapfig.PullVaultWithRemote(vaultDir, remote)
 		if err != nil {
 			return SyncDoneMsg{err: err}
 		}
 
 		// Then restore
-		if len(m.cfg.Watching) == 0 {
+		if len(cfg.Watching) == 0 {
 			return SyncDoneMsg{err: fmt.Errorf("no paths configured")}
 		}
 
-		restorer, err := snapfig.NewRestorer(m.cfg)
+		restorer, err := snapfig.NewRestorer(cfg)
 		if err != nil {
 			return SyncDoneMsg{err: err}
 		}

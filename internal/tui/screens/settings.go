@@ -12,6 +12,7 @@ import (
 
 const (
 	fieldRemote = iota
+	fieldVaultPath
 	fieldCopyInterval
 	fieldPushInterval
 	fieldPullInterval
@@ -22,6 +23,7 @@ const (
 // SettingsModel handles the settings screen.
 type SettingsModel struct {
 	remoteInput       textinput.Model
+	vaultPathInput    textinput.Model
 	copyIntervalInput textinput.Model
 	pushIntervalInput textinput.Model
 	pullIntervalInput textinput.Model
@@ -33,12 +35,18 @@ type SettingsModel struct {
 }
 
 // NewSettings creates a new settings screen.
-func NewSettings(currentRemote string, daemon config.DaemonConfig) SettingsModel {
+func NewSettings(currentRemote, currentVaultPath string, daemon config.DaemonConfig) SettingsModel {
 	remote := textinput.New()
 	remote.Placeholder = "git@github.com:user/dotfiles.git"
 	remote.CharLimit = 256
 	remote.Width = 50
 	remote.SetValue(currentRemote)
+
+	vaultPath := textinput.New()
+	vaultPath.Placeholder = "~/.snapfig/vault (default)"
+	vaultPath.CharLimit = 256
+	vaultPath.Width = 50
+	vaultPath.SetValue(currentVaultPath)
 
 	copyInt := textinput.New()
 	copyInt.Placeholder = "1h"
@@ -60,6 +68,7 @@ func NewSettings(currentRemote string, daemon config.DaemonConfig) SettingsModel
 
 	m := SettingsModel{
 		remoteInput:       remote,
+		vaultPathInput:    vaultPath,
 		copyIntervalInput: copyInt,
 		pushIntervalInput: pushInt,
 		pullIntervalInput: pullInt,
@@ -107,6 +116,8 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.focused {
 	case fieldRemote:
 		m.remoteInput, cmd = m.remoteInput.Update(msg)
+	case fieldVaultPath:
+		m.vaultPathInput, cmd = m.vaultPathInput.Update(msg)
 	case fieldCopyInterval:
 		m.copyIntervalInput, cmd = m.copyIntervalInput.Update(msg)
 	case fieldPushInterval:
@@ -119,6 +130,7 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *SettingsModel) updateFocus() {
 	m.remoteInput.Blur()
+	m.vaultPathInput.Blur()
 	m.copyIntervalInput.Blur()
 	m.pushIntervalInput.Blur()
 	m.pullIntervalInput.Blur()
@@ -126,6 +138,8 @@ func (m *SettingsModel) updateFocus() {
 	switch m.focused {
 	case fieldRemote:
 		m.remoteInput.Focus()
+	case fieldVaultPath:
+		m.vaultPathInput.Focus()
 	case fieldCopyInterval:
 		m.copyIntervalInput.Focus()
 	case fieldPushInterval:
@@ -145,6 +159,12 @@ func (m SettingsModel) View() string {
 	b.WriteString(styles.Normal.Render("Remote URL:"))
 	b.WriteString("\n")
 	b.WriteString(m.remoteInput.View())
+	b.WriteString("\n\n")
+
+	// Vault path
+	b.WriteString(styles.Normal.Render("Vault location (leave empty for default):"))
+	b.WriteString("\n")
+	b.WriteString(m.vaultPathInput.View())
 	b.WriteString("\n\n")
 
 	// Daemon section
@@ -186,6 +206,11 @@ func (m SettingsModel) View() string {
 // Remote returns the current remote URL value.
 func (m SettingsModel) Remote() string {
 	return strings.TrimSpace(m.remoteInput.Value())
+}
+
+// VaultPath returns the current vault path value.
+func (m SettingsModel) VaultPath() string {
+	return strings.TrimSpace(m.vaultPathInput.Value())
 }
 
 // DaemonConfig returns the daemon configuration values.

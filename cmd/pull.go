@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"path/filepath"
 
-	"github.com/adrianpk/snapfig/internal/config"
 	"github.com/adrianpk/snapfig/internal/snapfig"
 	"github.com/spf13/cobra"
 )
@@ -21,33 +19,31 @@ func init() {
 }
 
 func runPull(cmd *cobra.Command, args []string) error {
-	// Load config to get remote URL
-	configDir, err := config.DefaultConfigDir()
+	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
-	configPath := filepath.Join(configDir, "config.yml")
 
-	cfg, err := config.Load(configPath)
+	vaultDir, err := cfg.VaultDir()
 	if err != nil {
-		cfg = &config.Config{}
+		return err
 	}
 
 	remoteURL := cfg.Remote
 	if remoteURL == "" {
 		// Try to get from git
-		hasRemote, url, err := snapfig.HasRemote()
+		hasRemote, url, err := snapfig.HasRemote(vaultDir)
 		if err != nil {
 			return err
 		}
 		if !hasRemote {
-			return fmt.Errorf("no remote configured. Run 'snapfig tui' and configure in Settings (F6)")
+			return fmt.Errorf("no remote configured. Run 'snapfig' and configure in Settings (F9)")
 		}
 		remoteURL = url
 	}
 
 	fmt.Printf("Pulling from %s...\n", remoteURL)
-	result, err := snapfig.PullVaultWithRemote(remoteURL)
+	result, err := snapfig.PullVaultWithRemote(vaultDir, remoteURL)
 	if err != nil {
 		return err
 	}

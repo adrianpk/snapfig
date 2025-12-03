@@ -17,6 +17,7 @@ import (
 type Daemon struct {
 	cfg          *config.Config
 	configPath   string
+	vaultDir     string
 	copyInterval time.Duration
 	pushInterval time.Duration
 	pullInterval time.Duration
@@ -25,9 +26,15 @@ type Daemon struct {
 
 // New creates a new Daemon instance.
 func New(cfg *config.Config, configPath string) (*Daemon, error) {
+	vaultDir, err := cfg.VaultDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get vault directory: %w", err)
+	}
+
 	d := &Daemon{
 		cfg:        cfg,
 		configPath: configPath,
+		vaultDir:   vaultDir,
 		logger:     log.New(os.Stdout, "[snapfig] ", log.LstdFlags),
 	}
 
@@ -198,7 +205,7 @@ func (d *Daemon) doCopy() {
 func (d *Daemon) doPush() {
 	d.logger.Println("Push started")
 
-	if err := snapfig.PushVault(); err != nil {
+	if err := snapfig.PushVault(d.vaultDir); err != nil {
 		d.logger.Printf("Push error: %v", err)
 		return
 	}
@@ -209,7 +216,7 @@ func (d *Daemon) doPush() {
 func (d *Daemon) doPull() {
 	d.logger.Println("Pull started")
 
-	result, err := snapfig.PullVaultWithRemote(d.cfg.Remote)
+	result, err := snapfig.PullVaultWithRemote(d.vaultDir, d.cfg.Remote)
 	if err != nil {
 		d.logger.Printf("Pull error: %v", err)
 		return
