@@ -1,0 +1,13 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+    patch:
+      default:
+        target: auto
+
+ignore:
+  - "main.go"
+  - "cmd/**/*"
+  - "internal/tui/**/*"
