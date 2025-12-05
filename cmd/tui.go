@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/adrianpk/snapfig/internal/config"
-	"github.com/adrianpk/snapfig/internal/tui"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+
+	"github.com/adrianpk/snapfig/internal/config"
+	"github.com/adrianpk/snapfig/internal/tui"
 )
 
 var demoMode bool
