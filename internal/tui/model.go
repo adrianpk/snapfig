@@ -269,7 +269,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "f9":
 			if !m.busy && m.current == screenPicker {
-				m.settings = screens.NewSettings(m.cfg.Remote, m.cfg.VaultPath, m.cfg.Daemon)
+				m.settings = screens.NewSettings(m.cfg.Remote, m.cfg.GitToken, m.cfg.VaultPath, m.cfg.Daemon)
 				m.current = screenSettings
 				return m, m.settings.Init()
 			}
@@ -316,6 +316,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check if user pressed Enter or Esc
 		if m.settings.WasSaved() {
 			m.cfg.Remote = m.settings.Remote()
+			m.cfg.GitToken = m.settings.GitToken()
 			m.cfg.VaultPath = m.settings.VaultPath()
 			m.cfg.Daemon = m.settings.DaemonConfig()
 
@@ -510,8 +511,9 @@ func (m *Model) doRestore() tea.Cmd {
 // doPush pushes vault to remote.
 func (m *Model) doPush() tea.Cmd {
 	vaultDir := m.vaultDir
+	token := m.cfg.GitToken
 	return func() tea.Msg {
-		if err := snapfig.PushVault(vaultDir); err != nil {
+		if err := snapfig.PushVaultWithToken(vaultDir, token); err != nil {
 			return PushDoneMsg{err: err}
 		}
 		return PushDoneMsg{}
@@ -522,8 +524,9 @@ func (m *Model) doPush() tea.Cmd {
 func (m *Model) doPull() tea.Cmd {
 	vaultDir := m.vaultDir
 	remote := m.cfg.Remote
+	token := m.cfg.GitToken
 	return func() tea.Msg {
-		result, err := snapfig.PullVaultWithRemote(vaultDir, remote)
+		result, err := snapfig.PullVaultWithToken(vaultDir, remote, token)
 		if err != nil {
 			return PullDoneMsg{err: err}
 		}
@@ -537,6 +540,7 @@ func (m *Model) doBackup() tea.Cmd {
 	selected := m.picker.Selected()
 	cfg := m.cfg
 	configPath := m.configPath
+	token := m.cfg.GitToken
 	return func() tea.Msg {
 		// First, do the copy
 		if len(selected) == 0 {
@@ -573,7 +577,7 @@ func (m *Model) doBackup() tea.Cmd {
 		}
 
 		// Push
-		if err := snapfig.PushVault(vaultDir); err != nil {
+		if err := snapfig.PushVaultWithToken(vaultDir, token); err != nil {
 			return BackupDoneMsg{err: fmt.Errorf("copied but push failed: %w", err)}
 		}
 
@@ -591,10 +595,11 @@ func (m *Model) doBackup() tea.Cmd {
 func (m *Model) doSync() tea.Cmd {
 	vaultDir := m.vaultDir
 	remote := m.cfg.Remote
+	token := m.cfg.GitToken
 	cfg := m.cfg
 	return func() tea.Msg {
 		// First, pull (or clone)
-		pullResult, err := snapfig.PullVaultWithRemote(vaultDir, remote)
+		pullResult, err := snapfig.PullVaultWithToken(vaultDir, remote, token)
 		if err != nil {
 			return SyncDoneMsg{err: err}
 		}

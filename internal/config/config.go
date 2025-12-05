@@ -29,6 +29,7 @@ type DaemonConfig struct {
 type Config struct {
 	Git       GitMode      `yaml:"git"`
 	Remote    string       `yaml:"remote,omitempty"`
+	GitToken  string       `yaml:"git_token,omitempty"` // app token for HTTPS auth
 	VaultPath string       `yaml:"vault_path,omitempty"` // custom vault location
 	Watching  []Watched    `yaml:"watching"`
 	Daemon    DaemonConfig `yaml:"daemon,omitempty"`

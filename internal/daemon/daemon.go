@@ -205,7 +205,7 @@ func (d *Daemon) doCopy() {
 func (d *Daemon) doPush() {
 	d.logger.Println("Push started")
 
-	if err := snapfig.PushVault(d.vaultDir); err != nil {
+	if err := snapfig.PushVaultWithToken(d.vaultDir, d.cfg.GitToken); err != nil {
 		d.logger.Printf("Push error: %v", err)
 		return
 	}
@@ -216,7 +216,7 @@ func (d *Daemon) doPush() {
 func (d *Daemon) doPull() {
 	d.logger.Println("Pull started")
 
-	result, err := snapfig.PullVaultWithRemote(d.vaultDir, d.cfg.Remote)
+	result, err := snapfig.PullVaultWithToken(d.vaultDir, d.cfg.Remote, d.cfg.GitToken)
 	if err != nil {
 		d.logger.Printf("Pull error: %v", err)
 		return

@@ -38,7 +38,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Pushing to %s...\n", url)
-	if err := snapfig.PushVault(vaultDir); err != nil {
+	if err := snapfig.PushVaultWithToken(vaultDir, cfg.GitToken); err != nil {
 		return err
 	}
 
