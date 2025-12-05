@@ -3,11 +3,45 @@ package snapfig
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
+
+// sshURLRegex matches SSH-style git URLs like git@github.com:user/repo.git
+var sshURLRegex = regexp.MustCompile(`^git@([^:]+):(.+)$`)
+
+// urlWithToken returns a URL with the token embedded for HTTPS auth.
+// If no token is provided, returns the original URL unchanged.
+// If the URL is SSH format and token is provided, converts to HTTPS with token.
+func urlWithToken(remoteURL, token string) string {
+	if token == "" {
+		return remoteURL
+	}
+
+	// Check if it's an SSH URL (git@host:path)
+	if matches := sshURLRegex.FindStringSubmatch(remoteURL); matches != nil {
+		host := matches[1]
+		path := matches[2]
+		return fmt.Sprintf("https://x-access-token:%s@%s/%s", token, host, path)
+	}
+
+	// Check if it's already an HTTPS URL
+	if strings.HasPrefix(remoteURL, "https://") {
+		parsed, err := url.Parse(remoteURL)
+		if err != nil {
+			return remoteURL
+		}
+		parsed.User = url.UserPassword("x-access-token", token)
+		return parsed.String()
+	}
+
+	// Unknown format, return as-is
+	return remoteURL
+}
 
 // InitVaultRepo initializes the vault as a git repository if not already.
 func InitVaultRepo(vaultDir string) error {
@@ -63,7 +97,13 @@ func HasRemote(vaultDir string) (bool, string, error) {
 
 // PushVault pushes the vault to the configured remote.
 func PushVault(vaultDir string) error {
-	hasRemote, _, err := HasRemote(vaultDir)
+	return PushVaultWithToken(vaultDir, "")
+}
+
+// PushVaultWithToken pushes the vault to the configured remote using token auth if provided.
+// If token is empty, uses the configured remote URL directly (SSH or other).
+func PushVaultWithToken(vaultDir, token string) error {
+	hasRemote, remoteURL, err := HasRemote(vaultDir)
 	if err != nil {
 		return err
 	}
@@ -83,8 +123,14 @@ func PushVault(vaultDir string) error {
 		branch = "main"
 	}
 
-	// Push
-	pushCmd := exec.Command("git", "push", "-u", "origin", branch)
+	// Push - use token-embedded URL if token provided
+	var pushCmd *exec.Cmd
+	if token != "" {
+		authURL := urlWithToken(remoteURL, token)
+		pushCmd = exec.Command("git", "push", "-u", authURL, branch)
+	} else {
+		pushCmd = exec.Command("git", "push", "-u", "origin", branch)
+	}
 	pushCmd.Dir = vaultDir
 	if output, err := pushCmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("push failed: %s", strings.TrimSpace(string(output)))
@@ -101,11 +147,17 @@ type PullResult struct {
 // PullVault pulls from the configured remote.
 // If vault doesn't exist but remoteURL is provided, it clones first.
 func PullVault(vaultDir string) (*PullResult, error) {
-	return PullVaultWithRemote(vaultDir, "")
+	return PullVaultWithToken(vaultDir, "", "")
 }
 
 // PullVaultWithRemote pulls from remote, cloning first if vault doesn't exist.
 func PullVaultWithRemote(vaultDir, remoteURL string) (*PullResult, error) {
+	return PullVaultWithToken(vaultDir, remoteURL, "")
+}
+
+// PullVaultWithToken pulls from remote using token auth if provided.
+// If token is empty, uses SSH or configured credentials.
+func PullVaultWithToken(vaultDir, remoteURL, token string) (*PullResult, error) {
 	result := &PullResult{}
 
 	// Check if vault exists
@@ -127,8 +179,9 @@ func PullVaultWithRemote(vaultDir, remoteURL string) (*PullResult, error) {
 			return nil, fmt.Errorf("failed to create directory: %w", err)
 		}
 
-		// Clone
-		cloneCmd := exec.Command("git", "clone", remoteURL, vaultDir)
+		// Clone - use token-embedded URL if token provided
+		cloneURL := urlWithToken(remoteURL, token)
+		cloneCmd := exec.Command("git", "clone", cloneURL, vaultDir)
 		if output, err := cloneCmd.CombinedOutput(); err != nil {
 			return nil, fmt.Errorf("clone failed: %s", strings.TrimSpace(string(output)))
 		}
@@ -138,7 +191,7 @@ func PullVaultWithRemote(vaultDir, remoteURL string) (*PullResult, error) {
 	}
 
 	// Vault exists, do normal pull
-	hasRemote, _, err := HasRemote(vaultDir)
+	hasRemote, currentRemoteURL, err := HasRemote(vaultDir)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +199,14 @@ func PullVaultWithRemote(vaultDir, remoteURL string) (*PullResult, error) {
 		return nil, fmt.Errorf("no remote configured")
 	}
 
-	pullCmd := exec.Command("git", "pull")
+	// Pull - use token-embedded URL if token provided
+	var pullCmd *exec.Cmd
+	if token != "" {
+		authURL := urlWithToken(currentRemoteURL, token)
+		pullCmd = exec.Command("git", "pull", authURL)
+	} else {
+		pullCmd = exec.Command("git", "pull")
+	}
 	pullCmd.Dir = vaultDir
 	if output, err := pullCmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("pull failed: %s", strings.TrimSpace(string(output)))

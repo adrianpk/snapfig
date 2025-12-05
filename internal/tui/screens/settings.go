@@ -12,6 +12,7 @@ import (
 
 const (
 	fieldRemote = iota
+	fieldGitToken
 	fieldVaultPath
 	fieldCopyInterval
 	fieldPushInterval
@@ -23,6 +24,7 @@ const (
 // SettingsModel handles the settings screen.
 type SettingsModel struct {
 	remoteInput       textinput.Model
+	gitTokenInput     textinput.Model
 	vaultPathInput    textinput.Model
 	copyIntervalInput textinput.Model
 	pushIntervalInput textinput.Model
@@ -35,12 +37,20 @@ type SettingsModel struct {
 }
 
 // NewSettings creates a new settings screen.
-func NewSettings(currentRemote, currentVaultPath string, daemon config.DaemonConfig) SettingsModel {
+func NewSettings(currentRemote, currentGitToken, currentVaultPath string, daemon config.DaemonConfig) SettingsModel {
 	remote := textinput.New()
 	remote.Placeholder = "git@github.com:user/dotfiles.git"
 	remote.CharLimit = 256
 	remote.Width = 50
 	remote.SetValue(currentRemote)
+
+	gitToken := textinput.New()
+	gitToken.Placeholder = "ghp_xxxx (optional, uses SSH if empty)"
+	gitToken.CharLimit = 256
+	gitToken.Width = 50
+	gitToken.SetValue(currentGitToken)
+	gitToken.EchoMode = textinput.EchoPassword
+	gitToken.EchoCharacter = '*'
 
 	vaultPath := textinput.New()
 	vaultPath.Placeholder = "~/.snapfig/vault (default)"
@@ -68,6 +78,7 @@ func NewSettings(currentRemote, currentVaultPath string, daemon config.DaemonCon
 
 	m := SettingsModel{
 		remoteInput:       remote,
+		gitTokenInput:     gitToken,
 		vaultPathInput:    vaultPath,
 		copyIntervalInput: copyInt,
 		pushIntervalInput: pushInt,
@@ -116,6 +127,8 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.focused {
 	case fieldRemote:
 		m.remoteInput, cmd = m.remoteInput.Update(msg)
+	case fieldGitToken:
+		m.gitTokenInput, cmd = m.gitTokenInput.Update(msg)
 	case fieldVaultPath:
 		m.vaultPathInput, cmd = m.vaultPathInput.Update(msg)
 	case fieldCopyInterval:
@@ -130,6 +143,7 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *SettingsModel) updateFocus() {
 	m.remoteInput.Blur()
+	m.gitTokenInput.Blur()
 	m.vaultPathInput.Blur()
 	m.copyIntervalInput.Blur()
 	m.pushIntervalInput.Blur()
@@ -138,6 +152,8 @@ func (m *SettingsModel) updateFocus() {
 	switch m.focused {
 	case fieldRemote:
 		m.remoteInput.Focus()
+	case fieldGitToken:
+		m.gitTokenInput.Focus()
 	case fieldVaultPath:
 		m.vaultPathInput.Focus()
 	case fieldCopyInterval:
@@ -159,6 +175,12 @@ func (m SettingsModel) View() string {
 	b.WriteString(styles.Normal.Render("Remote URL:"))
 	b.WriteString("\n")
 	b.WriteString(m.remoteInput.View())
+	b.WriteString("\n\n")
+
+	// Git token
+	b.WriteString(styles.Normal.Render("Git token (optional, uses SSH if empty):"))
+	b.WriteString("\n")
+	b.WriteString(m.gitTokenInput.View())
 	b.WriteString("\n\n")
 
 	// Vault path
@@ -206,6 +228,11 @@ func (m SettingsModel) View() string {
 // Remote returns the current remote URL value.
 func (m SettingsModel) Remote() string {
 	return strings.TrimSpace(m.remoteInput.Value())
+}
+
+// GitToken returns the current git token value.
+func (m SettingsModel) GitToken() string {
+	return strings.TrimSpace(m.gitTokenInput.Value())
 }
 
 // VaultPath returns the current vault path value.
