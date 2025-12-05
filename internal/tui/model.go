@@ -6,11 +6,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/adrianpk/snapfig/internal/config"
 	"github.com/adrianpk/snapfig/internal/snapfig"
 	"github.com/adrianpk/snapfig/internal/tui/screens"
 	"github.com/adrianpk/snapfig/internal/tui/styles"
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 type screen int
@@ -40,11 +41,11 @@ type Model struct {
 // CopyDoneMsg is sent when copy operation completes.
 type CopyDoneMsg struct {
 	err          error
-	copied       int    // paths processed
-	skipped      int    // paths skipped (not found)
-	filesUpdated int    // files actually copied
-	filesSkipped int    // files unchanged
-	filesRemoved int    // stale files removed
+	copied       int // paths processed
+	skipped      int // paths skipped (not found)
+	filesUpdated int // files actually copied
+	filesSkipped int // files unchanged
+	filesRemoved int // stale files removed
 }
 
 // RestoreDoneMsg is sent when restore operation completes.

@@ -4,9 +4,10 @@ package screens
 import (
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/adrianpk/snapfig/internal/snapfig"
 	"github.com/adrianpk/snapfig/internal/tui/styles"
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 // RestoreNode represents a file or directory available for selective restore.

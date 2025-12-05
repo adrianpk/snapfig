@@ -3,8 +3,9 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/adrianpk/snapfig/internal/snapfig"
 	"github.com/spf13/cobra"
+
+	"github.com/adrianpk/snapfig/internal/snapfig"
 )
 
 var pushCmd = &cobra.Command{

@@ -1,5 +1,8 @@
 # Snapfig
 
+[![Test](https://github.com/adrianpk/snapfig/actions/workflows/test.yml/badge.svg)](https://github.com/adrianpk/snapfig/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/adrianpk/snapfig/branch/main/graph/badge.svg)](https://codecov.io/gh/adrianpk/snapfig)
+
 Backup and restore your dotfiles straight from their original locations.
 
 <p align="center">
@@ -277,9 +280,19 @@ Paths are relative to home directory. See [Background Runner](#background-runner
 - ~~Background runner for periodic snapshots.~~
 - ~~Implement fire-and-forget setup command for automated config and start.~~
 - ~~Alternative vault location: allow configuring a custom vault path (e.g. external drive, network share) for additional redundancy or local-only backups.~~
+- ~~Add automated tests.~~
 - Improve and polish the interface.
 - Token-based authentication for git cloud services.
-- Add automated tests.
+
+## Test Coverage
+
+The core business logic packages (`snapfig`, `config`, `paths`, `daemon`) have high test coverage (80%+). The TUI and CLI packages (`internal/tui`, `internal/tui/screens`, `cmd`) have lower coverage because:
+
+- **TUI components**: Bubble Tea models can be unit tested (and are), but achieving high coverage requires mocking terminal I/O and simulating complex user interactions. The current tests cover the Update/View cycle and key bindings, but not all rendering paths.
+
+- **CLI commands**: The `cmd` package contains thin wrappers that mostly delegate to the core packages. Testing them end-to-end requires either subprocess execution or dependency injection via interfaces.
+
+With interface-based refactoring, both areas could be improved. This is not a current priority since the core logic—where bugs would cause data loss—is well tested.
 
 ## License
 

@@ -6,9 +6,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/adrianpk/snapfig/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/adrianpk/snapfig/internal/config"
 )
 
 var cfgFile string
