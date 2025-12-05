@@ -6,9 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/adrianpk/snapfig/internal/config"
 	"github.com/adrianpk/snapfig/internal/snapfig"
-	"github.com/spf13/cobra"
 )
 
 var (
