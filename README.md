@@ -1,6 +1,6 @@
 # Snapfig
 
-[![Test](https://github.com/adrianpk/snapfig/actions/workflows/test.yml/badge.svg)](https://github.com/adrianpk/snapfig/actions/workflows/test.yml)
+[![Tests](https://github.com/adrianpk/snapfig/actions/workflows/test.yml/badge.svg)](https://github.com/adrianpk/snapfig/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/adrianpk/snapfig/branch/main/graph/badge.svg)](https://codecov.io/gh/adrianpk/snapfig)
 
 Backup and restore your dotfiles straight from their original locations.
@@ -9,27 +9,68 @@ Backup and restore your dotfiles straight from their original locations.
   <img src="docs/img/snapfig.png" alt="Snapfig TUI" width="700">
 </p>
 
-> **Note:** This is the current version of Snapfig. The [original version](https://github.com/adrianpk/snapfig-deprecated) relied on a local webserver and browser-based interface. This version uses [Bubble Tea](https://github.com/charmbracelet/bubbletea) and runs directly in the console.
+## What It Is
 
----
+Snapfig copies your configuration files to a local vault (`~/.snapfig/vault/`) versioned with git. Unlike symlink-based tools, files stay in their original locations—Snapfig mirrors them on demand.
 
-## What it is
+**Why not symlinks?** Real copies mean real redundancy. If originals break, you have actual backups.
 
-Snapfig is a backup and versioning system for configuration files (dotfiles, application settings, etc.). It was designed for both manual and automatic backups, though nothing prevents you from using it for documents or other types of files.
+## Two Ways to Use It
 
-**Why not symlinks?**
+### Interactive (TUI)
 
-Most dotfile managers use symlinks, which can break and require understanding Git workflows. Snapfig takes a different approach:
+```bash
+snapfig
+```
 
-- **Real redundancy**: You get actual copies of your files in the vault, not just links. If something goes wrong with your originals, you have a real backup to restore from.
+Navigate with arrows, `Space` to select, `F7` to backup, `F8` to sync.
 
-- **Automated sync**: The background runner keeps your backups up to date without having to remember to commit and push. You can also configure an alternative vault location on a different drive for extra redundancy.
+### Command Line
 
-- **Storage is not an issue**: Modern hard drives are huge, and configuration files are tiny compared to media or photos. Having real copies wastes essentially no space.
+The TUI is optional. All operations work from the command line:
 
-## What it does
+```bash
+snapfig copy              # Copy to vault
+snapfig push              # Push to remote
+snapfig pull              # Pull from remote
+snapfig restore           # Restore from vault
+```
 
-Snapfig copies your configuration files to a local vault (`~/.snapfig/vault/`) that's automatically versioned with git. Unlike tools that use symlinks, you keep working with your files in their original locations. Snapfig mirrors them when you ask.
+Or fire-and-forget setup for scripting:
+
+```bash
+snapfig setup \
+  --paths=".config/nvim:g,.zshrc:x,.bashrc:x" \
+  --remote="git@github.com:user/dotfiles.git"
+```
+
+## Automation
+
+### Background Runner
+
+```bash
+snapfig daemon start
+```
+
+Configurable intervals for copy, push, pull. See [daemon docs](docs/daemon.md).
+
+### Or Just Cron
+
+The daemon is optional. Prefer cron? Use it:
+
+```cron
+0 * * * * snapfig copy
+0 3 * * * snapfig push
+```
+
+## Git Handling
+
+Config directories that are git repos (nvim, doom emacs, etc.):
+
+- `[x]` mode: Removes `.git` in vault (clean copy)
+- `[g]` mode: Renames `.git` to `.git_disabled` (preserves history)
+
+Originals are never modified.
 
 ## Install
 
@@ -45,254 +86,23 @@ cd snapfig
 go build -o snapfig .
 ```
 
-## Quick start
+## Documentation
 
-```bash
-snapfig
-```
-
-1. Navigate with arrow keys or `j/k`
-2. `Space` to select paths (cycles through modes)
-3. `F9` to configure your remote repository
-4. `F7` to backup (copy + push)
-
-## TUI Controls
-
-| Key | Action |
-|-----|--------|
-| `Space` | Cycle selection: `[ ]` → `[x]` → `[g]` → `[ ]` |
-| `F2` | Copy to vault |
-| `F3` | Push to remote |
-| `F4` | Pull from remote (clones if vault doesn't exist) |
-| `F5` | Restore from vault |
-| `F6` | **Selective restore** (choose specific files to restore) |
-| `F7` | **Backup** (Copy + Push in one step) |
-| `F8` | **Sync** (Pull + Restore in one step) |
-| `F9` | Settings (remote URL, background runner intervals) |
-| `F10` | Quit |
-
-### Selection modes
-
-- `[ ]` = Not selected
-- `[x]` = Selected, remove `.git` directories in backup
-- `[g]` = Selected, preserve `.git` as `.git_disabled` (keeps history)
-
-## Typical workflows
-
-### On your main machine
-
-1. `snapfig`
-2. Select your config directories
-3. `F9` → enter your git remote URL
-4. `F7` → backs up and pushes
-
-### On a new machine
-
-1. Copy your `~/.config/snapfig/config.yml` (or just set the remote via F9)
-2. `snapfig`
-3. `F8` → clones vault and restores everything
-
-### Regular backups
-
-Just press `F7`. It copies changes and pushes to remote.
-
-## CLI Commands
-
-```bash
-snapfig                 # Interactive interface (default)
-snapfig copy            # Copy to vault
-snapfig push            # Push to remote
-snapfig pull            # Pull from remote (clones if needed)
-snapfig restore         # Restore from vault
-snapfig daemon start    # Start background runner
-snapfig daemon stop     # Stop background runner
-snapfig daemon status   # Show background runner status
-snapfig setup           # Fire-and-forget setup (see below)
-```
-
-## Fire-and-Forget Setup
-
-For automation scripts or quick setup without using the TUI:
-
-```bash
-snapfig setup \
-  --paths=".config/nvim:g,.config/i3:x,.zshrc:x" \
-  --remote="git@github.com:user/vault.git" \
-  --copy-interval="1h" \
-  --push-interval="24h"
-```
-
-This command:
-1. Creates `~/.config/snapfig/config.yml` with the specified settings
-2. Runs an initial copy to vault
-3. Configures the git remote
-4. Starts the daemon
-
-### Path format
-
-Paths use the format `path:mode` where mode is:
-- `x` = remove `.git` directories (default if omitted)
-- `g` = preserve `.git` as `.git_disabled`
-
-### Available flags
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--paths` | Paths to watch (required) | - |
-| `--remote` | Git remote URL | - |
-| `--vault-path` | Custom vault location | `~/.snapfig/vault` |
-| `--copy-interval` | Copy interval | `1h` |
-| `--push-interval` | Push interval | `24h` |
-| `--pull-interval` | Pull interval | disabled |
-| `--auto-restore` | Auto restore after pull | `false` |
-| `--no-daemon` | Don't start daemon | `false` |
-| `--force` | Overwrite existing config | `false` |
-
-After setup completes, instructions for daemon persistence (shell rc or systemd) are printed.
-
-## How it handles git
-
-Many config directories (nvim, doom emacs, etc.) are git repos themselves. Snapfig handles this:
-
-- **remove** (`[x]`): Deletes `.git` in the vault copy. Clean backup, no nested repos.
-- **disable** (`[g]`): Renames `.git` to `.git_disabled`. On restore, reverts back to `.git`.
-
-Original directories are never modified.
-
-## Background Runner
-
-The daemon runs scheduled backups in the background without manual intervention.
-
-### Commands
-
-```bash
-snapfig daemon start    # Start daemon
-snapfig daemon status   # Check if running and show config
-snapfig daemon stop     # Stop daemon
-```
-
-### Configuration
-
-Configure via **Settings (F9)** in the TUI, or edit `~/.config/snapfig/config.yml` directly:
-
-```yaml
-daemon:
-  copy_interval: 1h      # How often to copy to vault
-  push_interval: 24h     # How often to push to remote
-  pull_interval: ""      # How often to pull from remote (empty = disabled)
-  auto_restore: false    # Automatically restore after pull
-```
-
-### Parameters
-
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `copy_interval` | Runs smart copy at this interval. Only changed files are copied. | `30m`, `1h`, `2h` |
-| `push_interval` | Pushes vault to remote at this interval. Requires `remote` to be configured. | `12h`, `24h` |
-| `pull_interval` | Pulls from remote at this interval. **Disabled by default** - enable with caution on multi-machine setups. | `24h` |
-| `auto_restore` | When `true`, automatically restores files after a pull. **Use carefully** - could overwrite local changes. | `true`, `false` |
-
-Intervals use Go duration format: `s` (seconds), `m` (minutes), `h` (hours). Examples: `30s`, `15m`, `1h`, `24h`.
-
-### Logs
-
-Activity is logged to `~/.snapfig/daemon.log`:
-
-```bash
-tail -f ~/.snapfig/daemon.log
-```
-
-Example output:
-```
-[snapfig] 2025/12/03 11:33:40 Copy started
-[snapfig] 2025/12/03 11:33:40 Copy done: 1 paths, 2 updated, 3 unchanged, 0 removed
-[snapfig] 2025/12/03 11:33:40   copied: .config/nvim
-```
-
-## Alternative Vault Location
-
-By default, the vault is stored at `~/.snapfig/vault`. You can configure a custom location for:
-- External drives for additional redundancy
-- Network shares for centralized backups
-- Any other location you prefer
-
-### Configure via TUI
-
-1. Press `F9` to open Settings
-2. Enter your custom path in "Vault location"
-3. Press Enter to save
-
-### Configure via setup command
-
-```bash
-snapfig setup \
-  --paths=".config/nvim:g,.zshrc:x" \
-  --vault-path="/mnt/backup/dotfiles"
-```
-
-### Configure via config file
-
-```yaml
-vault_path: /mnt/external/dotfiles-vault
-```
-
-The path can be absolute or start with `~` for home directory expansion.
-
-## Files
-
-```
-~/.config/snapfig/
-└── config.yml          # Configuration (paths to watch, remote URL, daemon settings)
-
-~/.snapfig/
-├── vault/              # Your backed up files (git repo)
-├── manifest.md         # Summary of what's backed up
-├── daemon.pid          # PID file when daemon is running
-└── daemon.log          # Daemon activity log
-```
-
-## Config format
-
-```yaml
-git: disable
-remote: git@github.com:user/dotfiles.git
-vault_path: ""  # optional: custom vault location
-
-watching:
-  - path: .config/nvim
-    git: disable
-    enabled: true
-  - path: .zshrc
-    git: remove
-    enabled: true
-
-daemon:
-  copy_interval: 1h
-  push_interval: 24h
-```
-
-Paths are relative to home directory. See [Background Runner](#background-runner) for all daemon options and [Alternative Vault Location](#alternative-vault-location) for custom vault paths.
+- [Getting Started](docs/getting-started.md)
+- [CLI Reference](docs/cli-reference.md)
+- [Background Runner](docs/daemon.md)
+- [Workflows](docs/workflows.md)
+- [Architecture](docs/architecture.md)
 
 ## Planned Improvements
 
-- ~~Smart copy: copy only updated files within directories instead of replicating entire directory structures.~~
-- ~~Selective restore: Allow restoring only specific dotfiles instead of restoring everything.~~
-- ~~Background runner for periodic snapshots.~~
-- ~~Implement fire-and-forget setup command for automated config and start.~~
-- ~~Alternative vault location: allow configuring a custom vault path (e.g. external drive, network share) for additional redundancy or local-only backups.~~
-- ~~Add automated tests.~~
-- Improve and polish the interface.
-- Token-based authentication for git cloud services.
-
-## Test Coverage
-
-The core business logic packages (`snapfig`, `config`, `paths`, `daemon`) have high test coverage (80%+). The TUI and CLI packages (`internal/tui`, `internal/tui/screens`, `cmd`) have lower coverage because:
-
-- **TUI components**: Bubble Tea models can be unit tested (and are), but achieving high coverage requires mocking terminal I/O and simulating complex user interactions. The current tests cover the Update/View cycle and key bindings, but not all rendering paths.
-
-- **CLI commands**: The `cmd` package contains thin wrappers that mostly delegate to the core packages. Testing them end-to-end requires either subprocess execution or dependency injection via interfaces.
-
-With interface-based refactoring, both areas could be improved. This is not a current priority since the core logic—where bugs would cause data loss—is well tested.
+- ~~Smart copy~~
+- ~~Selective restore~~
+- ~~Background runner~~
+- ~~Fire-and-forget setup command~~
+- ~~Alternative vault location~~
+- ~~Automated tests~~
+- ~~Token-based authentication for git cloud services~~
 
 ## License
 
