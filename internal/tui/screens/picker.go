@@ -7,10 +7,11 @@ import (
 	"sort"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/adrianpk/snapfig/internal/config"
 	"github.com/adrianpk/snapfig/internal/paths"
 	"github.com/adrianpk/snapfig/internal/tui/styles"
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 // SelectState represents the selection state of a node.
@@ -23,16 +24,16 @@ const (
 )
 
 type node struct {
-	name       string
-	path       string
-	isDir      bool
-	expanded   bool
-	state      SelectState
-	depth      int
-	parent     *node
-	children   []*node
-	loaded     bool
-	wellKnown  bool
+	name      string
+	path      string
+	isDir     bool
+	expanded  bool
+	state     SelectState
+	depth     int
+	parent    *node
+	children  []*node
+	loaded    bool
+	wellKnown bool
 }
 
 // PickerModel handles directory selection with tree navigation.

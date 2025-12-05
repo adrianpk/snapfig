@@ -8,9 +8,10 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/spf13/cobra"
+
 	"github.com/adrianpk/snapfig/internal/config"
 	"github.com/adrianpk/snapfig/internal/daemon"
-	"github.com/spf13/cobra"
 )
 
 var daemonCmd = &cobra.Command{

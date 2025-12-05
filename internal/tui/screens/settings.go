@@ -4,10 +4,11 @@ package screens
 import (
 	"strings"
 
-	"github.com/adrianpk/snapfig/internal/config"
-	"github.com/adrianpk/snapfig/internal/tui/styles"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/adrianpk/snapfig/internal/config"
+	"github.com/adrianpk/snapfig/internal/tui/styles"
 )
 
 const (
