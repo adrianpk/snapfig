@@ -43,7 +43,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Pulling from %s...\n", remoteURL)
-	result, err := snapfig.PullVaultWithRemote(vaultDir, remoteURL)
+	result, err := snapfig.PullVaultWithToken(vaultDir, remoteURL, cfg.GitToken)
 	if err != nil {
 		return err
 	}
