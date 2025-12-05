@@ -16,7 +16,7 @@ func TestNewSettings(t *testing.T) {
 		AutoRestore:  false,
 	}
 
-	m := NewSettings("git@github.com:user/repo.git", "/custom/vault", daemon)
+	m := NewSettings("git@github.com:user/repo.git", "", "/custom/vault", daemon)
 
 	if m.Remote() != "git@github.com:user/repo.git" {
 		t.Errorf("Remote() = %q, want git@github.com:user/repo.git", m.Remote())
@@ -30,7 +30,7 @@ func TestNewSettings(t *testing.T) {
 }
 
 func TestSettingsInit(t *testing.T) {
-	m := NewSettings("", "", config.DaemonConfig{})
+	m := NewSettings("", "", "", config.DaemonConfig{})
 	cmd := m.Init()
 
 	if cmd == nil {
@@ -39,34 +39,34 @@ func TestSettingsInit(t *testing.T) {
 }
 
 func TestSettingsNavigationDown(t *testing.T) {
-	m := NewSettings("", "", config.DaemonConfig{})
+	m := NewSettings("", "", "", config.DaemonConfig{})
 
 	// Initial focus is fieldRemote (0)
 	if m.focused != fieldRemote {
 		t.Fatalf("initial focus = %d, want fieldRemote", m.focused)
 	}
 
-	// Press tab to move to next field
+	// Press tab to move to next field (gitToken)
 	msg := tea.KeyMsg{Type: tea.KeyTab}
 	updated, _ := m.Update(msg)
 	m = updated.(SettingsModel)
 
-	if m.focused != fieldVaultPath {
-		t.Errorf("after tab, focused = %d, want fieldVaultPath", m.focused)
+	if m.focused != fieldGitToken {
+		t.Errorf("after tab, focused = %d, want fieldGitToken", m.focused)
 	}
 
-	// Press down to move to next field
+	// Press down to move to next field (vaultPath)
 	msg = tea.KeyMsg{Type: tea.KeyDown}
 	updated, _ = m.Update(msg)
 	m = updated.(SettingsModel)
 
-	if m.focused != fieldCopyInterval {
-		t.Errorf("after down, focused = %d, want fieldCopyInterval", m.focused)
+	if m.focused != fieldVaultPath {
+		t.Errorf("after down, focused = %d, want fieldVaultPath", m.focused)
 	}
 }
 
 func TestSettingsNavigationUp(t *testing.T) {
-	m := NewSettings("", "", config.DaemonConfig{})
+	m := NewSettings("", "", "", config.DaemonConfig{})
 
 	// Move to vault path first
 	msg := tea.KeyMsg{Type: tea.KeyTab}
@@ -84,7 +84,7 @@ func TestSettingsNavigationUp(t *testing.T) {
 }
 
 func TestSettingsNavigationWraps(t *testing.T) {
-	m := NewSettings("", "", config.DaemonConfig{})
+	m := NewSettings("", "", "", config.DaemonConfig{})
 
 	// Press up from first field should wrap to last
 	msg := tea.KeyMsg{Type: tea.KeyUp}
@@ -106,7 +106,7 @@ func TestSettingsNavigationWraps(t *testing.T) {
 }
 
 func TestSettingsEnterSaves(t *testing.T) {
-	m := NewSettings("", "", config.DaemonConfig{})
+	m := NewSettings("", "", "", config.DaemonConfig{})
 
 	if m.WasSaved() {
 		t.Error("WasSaved() should be false initially")
@@ -122,7 +122,7 @@ func TestSettingsEnterSaves(t *testing.T) {
 }
 
 func TestSettingsAutoRestoreToggle(t *testing.T) {
-	m := NewSettings("", "", config.DaemonConfig{AutoRestore: false})
+	m := NewSettings("", "", "", config.DaemonConfig{AutoRestore: false})
 
 	// Navigate to auto restore field
 	for i := 0; i < fieldAutoRestore; i++ {
@@ -169,7 +169,7 @@ func TestSettingsDaemonConfig(t *testing.T) {
 		AutoRestore:  true,
 	}
 
-	m := NewSettings("", "", daemon)
+	m := NewSettings("", "", "", daemon)
 	result := m.DaemonConfig()
 
 	if result.CopyInterval != "30m" {
@@ -187,7 +187,7 @@ func TestSettingsDaemonConfig(t *testing.T) {
 }
 
 func TestSettingsView(t *testing.T) {
-	m := NewSettings("git@github.com:test/repo.git", "", config.DaemonConfig{})
+	m := NewSettings("git@github.com:test/repo.git", "", "", config.DaemonConfig{})
 	m.width = 80
 	m.height = 24
 
@@ -210,7 +210,7 @@ func TestSettingsView(t *testing.T) {
 }
 
 func TestSettingsWindowSize(t *testing.T) {
-	m := NewSettings("", "", config.DaemonConfig{})
+	m := NewSettings("", "", "", config.DaemonConfig{})
 
 	msg := tea.WindowSizeMsg{Width: 100, Height: 50}
 	updated, _ := m.Update(msg)
