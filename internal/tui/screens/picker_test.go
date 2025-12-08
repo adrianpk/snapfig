@@ -222,50 +222,6 @@ type testError struct{}
 
 func (e *testError) Error() string { return "test error" }
 
-func TestIsWellKnownPrefix(t *testing.T) {
-	tests := []struct {
-		path      string
-		wellKnown map[string]bool
-		want      bool
-	}{
-		{
-			path:      ".config",
-			wellKnown: map[string]bool{".config/nvim": true},
-			want:      true,
-		},
-		{
-			path:      ".config/nvim",
-			wellKnown: map[string]bool{".config/nvim": true},
-			want:      true,
-		},
-		{
-			path:      ".bashrc",
-			wellKnown: map[string]bool{".config/nvim": true},
-			want:      false,
-		},
-		{
-			path:      ".local",
-			wellKnown: map[string]bool{".local/share/nvim": true},
-			want:      true,
-		},
-		{
-			path:      ".config",
-			wellKnown: nil,
-			want:      false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.path, func(t *testing.T) {
-			m := &PickerModel{wellKnown: tt.wellKnown}
-			got := m.isWellKnownPrefix(tt.path)
-			if got != tt.want {
-				t.Errorf("isWellKnownPrefix(%q) = %v, want %v", tt.path, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestIsDemoPath(t *testing.T) {
 	tests := []struct {
 		path      string

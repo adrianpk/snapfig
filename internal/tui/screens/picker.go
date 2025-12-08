@@ -50,6 +50,7 @@ type PickerModel struct {
 	height      int
 	demoMode    bool
 	demoPaths   map[string]bool
+	vaultPath   string // relative to home, to exclude from listing
 }
 
 type initMsg struct {
@@ -112,6 +113,7 @@ func getDemoPaths() map[string]bool {
 // NewPicker creates a new tree picker screen with optional preselected paths from config.
 func NewPicker(cfg *config.Config, demoMode bool) PickerModel {
 	preselected := make(map[string]SelectState)
+	var vaultPath string
 	if cfg != nil {
 		for _, w := range cfg.Watching {
 			if w.Enabled {
@@ -122,6 +124,22 @@ func NewPicker(cfg *config.Config, demoMode bool) PickerModel {
 				preselected[w.Path] = state
 			}
 		}
+		// Get vault path relative to home to exclude from listing
+		if vaultDir, err := cfg.VaultDir(); err == nil {
+			if home, err := os.UserHomeDir(); err == nil {
+				if rel, err := filepath.Rel(home, vaultDir); err == nil {
+					// Get the top-level directory (e.g., ".snapfig" from ".snapfig/vault")
+					parts := strings.Split(rel, string(os.PathSeparator))
+					if len(parts) > 0 {
+						vaultPath = parts[0]
+					}
+				}
+			}
+		}
+	}
+	// Default to .snapfig if no config
+	if vaultPath == "" {
+		vaultPath = ".snapfig"
 	}
 	var demoPaths map[string]bool
 	if demoMode {
@@ -131,6 +149,7 @@ func NewPicker(cfg *config.Config, demoMode bool) PickerModel {
 		preselected: preselected,
 		demoMode:    demoMode,
 		demoPaths:   demoPaths,
+		vaultPath:   vaultPath,
 	}
 }
 
@@ -268,10 +287,10 @@ func (m *PickerModel) loadChildren(n *node) {
 	var dirs, files []*node
 	for _, e := range entries {
 		name := e.Name()
-		if strings.HasPrefix(name, ".") && name != ".config" && name != ".ssh" && name != ".gnupg" && name != ".kube" {
-			if n.depth > 0 || !m.isWellKnownPrefix(name) {
-				continue
-			}
+
+		// Only exclude the vault directory (e.g., .snapfig)
+		if n.depth == 0 && name == m.vaultPath {
+			continue
 		}
 
 		childPath := name
@@ -327,14 +346,6 @@ func (m *PickerModel) loadChildren(n *node) {
 	n.loaded = true
 }
 
-func (m *PickerModel) isWellKnownPrefix(name string) bool {
-	for path := range m.wellKnown {
-		if strings.HasPrefix(path, name) || strings.HasPrefix(path, "."+name) {
-			return true
-		}
-	}
-	return false
-}
 
 // isDemoPath checks if a path should be shown in demo mode.
 // Returns true if the path is in the demo list or is a parent of a demo path.

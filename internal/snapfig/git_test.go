@@ -529,7 +529,7 @@ func TestPullVaultExisting(t *testing.T) {
 	exec.Command("git", "-C", vaultDir, "add", "-A").Run()
 	exec.Command("git", "-C", vaultDir, "commit", "-m", "initial").Run()
 	SetRemote(vaultDir, bareDir)
-	exec.Command("git", "-C", vaultDir, "push", "-u", "origin", "master").Run()
+	exec.Command("git", "-C", vaultDir, "push", "-u", "origin", "main").Run()
 
 	// Pull should work
 	result, err := PullVaultWithRemote(vaultDir, bareDir)

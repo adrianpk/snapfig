@@ -9,3 +9,5 @@ coverage:
 
 ignore:
   - "main.go"
+  - "**/*_mock.go"
+  - "internal/tui/styles/**/*"

@@ -55,7 +55,7 @@ func InitVaultRepo(vaultDir string) error {
 		return err
 	}
 
-	cmd := exec.Command("git", "init")
+	cmd := exec.Command("git", "init", "-b", "main")
 	cmd.Dir = vaultDir
 	return cmd.Run()
 }
