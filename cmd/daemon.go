@@ -10,7 +10,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/adrianpk/snapfig/internal/config"
 	"github.com/adrianpk/snapfig/internal/daemon"
 )
 
@@ -59,12 +58,12 @@ func runDaemonStart(cmd *cobra.Command, args []string) error {
 	}
 
 	// Get paths
-	logPath, err := config.LogFilePath()
+	logPath, err := LogFilePathFunc()
 	if err != nil {
 		return err
 	}
 
-	snapfigDir, err := config.DefaultSnapfigDir()
+	snapfigDir, err := DefaultSnapfigDirFunc()
 	if err != nil {
 		return err
 	}
@@ -99,6 +98,8 @@ func runDaemonStart(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// runDaemonStop terminates a running daemon process via SIGTERM.
+// Requires running daemon process; signal handling not unit testable.
 func runDaemonStop(cmd *cobra.Command, args []string) error {
 	pid, running := getDaemonPid()
 	if !running {
@@ -116,7 +117,7 @@ func runDaemonStop(cmd *cobra.Command, args []string) error {
 	}
 
 	// Remove PID file
-	pidPath, _ := config.PidFilePath()
+	pidPath, _ := PidFilePathFunc()
 	os.Remove(pidPath)
 
 	fmt.Printf("Daemon stopped (pid %d)\n", pid)
@@ -133,9 +134,9 @@ func runDaemonStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Daemon is running (pid %d)\n", pid)
 
 	// Load config to show intervals
-	configDir, _ := config.DefaultConfigDir()
+	configDir, _ := DefaultConfigDirFunc()
 	configPath := filepath.Join(configDir, "config.yml")
-	cfg, err := config.Load(configPath)
+	cfg, err := ConfigLoader(configPath)
 	if err == nil && cfg.Daemon.CopyInterval != "" {
 		fmt.Printf("  Copy interval: %s\n", cfg.Daemon.CopyInterval)
 		if cfg.Daemon.PushInterval != "" {
@@ -150,14 +151,16 @@ func runDaemonStatus(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// runDaemonForeground runs the daemon in the foreground (blocking).
+// Runs blocking signal loop; daemon logic tested in daemon_test.go.
 func runDaemonForeground(cmd *cobra.Command, args []string) error {
-	configDir, err := config.DefaultConfigDir()
+	configDir, err := DefaultConfigDirFunc()
 	if err != nil {
 		return err
 	}
 	configPath := filepath.Join(configDir, "config.yml")
 
-	cfg, err := config.Load(configPath)
+	cfg, err := ConfigLoader(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -171,7 +174,7 @@ func runDaemonForeground(cmd *cobra.Command, args []string) error {
 }
 
 func getDaemonPid() (int, bool) {
-	pidPath, err := config.PidFilePath()
+	pidPath, err := PidFilePathFunc()
 	if err != nil {
 		return 0, false
 	}

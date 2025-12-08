@@ -9,5 +9,3 @@ coverage:
 
 ignore:
   - "main.go"
-  - "cmd/**/*"
-  - "internal/tui/**/*"

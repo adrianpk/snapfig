@@ -46,6 +46,7 @@ func NewRestorePicker() RestorePickerModel {
 }
 
 // InitRestorePicker loads vault entries matching config.
+// Returns async tea.Cmd; RestorePickerInitMsg handling tested in Update tests.
 func InitRestorePicker(restorer *snapfig.Restorer) tea.Cmd {
 	return func() tea.Msg {
 		entries, err := restorer.ListVaultEntries()

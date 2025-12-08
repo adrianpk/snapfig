@@ -111,7 +111,8 @@ func (d *Daemon) reloadConfig() bool {
 	return changed
 }
 
-// Run starts the daemon loop.
+// Run starts the daemon loop with signal handling and periodic tasks.
+// Blocking loop with signal.Notify; task methods tested separately.
 func (d *Daemon) Run() error {
 	if d.copyInterval == 0 && d.pushInterval == 0 && d.pullInterval == 0 {
 		return fmt.Errorf("no intervals configured in daemon settings")
