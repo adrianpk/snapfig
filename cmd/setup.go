@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/adrianpk/snapfig/internal/config"
-	"github.com/adrianpk/snapfig/internal/snapfig"
 )
 
 var (
@@ -57,7 +56,7 @@ func init() {
 
 func runSetup(cmd *cobra.Command, args []string) error {
 	// Check if config already exists
-	configDir, err := config.DefaultConfigDir()
+	configDir, err := DefaultConfigDirFunc()
 	if err != nil {
 		return err
 	}
@@ -107,14 +106,14 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  %s [%s]\n", w.Path, mode)
 	}
 
-	// Run initial copy
+	// Create service and run initial copy
 	fmt.Println("\nRunning initial copy...")
-	copier, err := snapfig.NewCopier(cfg)
+	svc, err := ServiceFactory(cfg, configPath)
 	if err != nil {
-		return fmt.Errorf("failed to create copier: %w", err)
+		return fmt.Errorf("failed to create service: %w", err)
 	}
 
-	result, err := copier.Copy()
+	result, err := svc.Copy()
 	if err != nil {
 		return fmt.Errorf("initial copy failed: %w", err)
 	}
@@ -122,10 +121,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 	// Configure remote if provided
 	if setupRemote != "" {
-		vaultDir, err := cfg.VaultDir()
-		if err != nil {
-			fmt.Printf("Warning: failed to get vault directory: %v\n", err)
-		} else if err := snapfig.SetRemote(vaultDir, setupRemote); err != nil {
+		if err := svc.SetRemote(setupRemote); err != nil {
 			fmt.Printf("Warning: failed to set git remote: %v\n", err)
 		} else {
 			fmt.Printf("Remote configured: %s\n", setupRemote)

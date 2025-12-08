@@ -232,3 +232,47 @@ func containsString(s, substr string) bool {
 	}
 	return false
 }
+
+func TestSettingsGitToken(t *testing.T) {
+	m := NewSettings("", "my-secret-token", "", config.DaemonConfig{})
+
+	token := m.GitToken()
+	if token != "my-secret-token" {
+		t.Errorf("GitToken() = %q, want 'my-secret-token'", token)
+	}
+}
+
+func TestSettingsRemote(t *testing.T) {
+	m := NewSettings("git@github.com:user/repo.git", "", "", config.DaemonConfig{})
+
+	remote := m.Remote()
+	if remote != "git@github.com:user/repo.git" {
+		t.Errorf("Remote() = %q, want 'git@github.com:user/repo.git'", remote)
+	}
+}
+
+func TestSettingsVaultPath(t *testing.T) {
+	m := NewSettings("", "", "/custom/vault/path", config.DaemonConfig{})
+
+	vaultPath := m.VaultPath()
+	if vaultPath != "/custom/vault/path" {
+		t.Errorf("VaultPath() = %q, want '/custom/vault/path'", vaultPath)
+	}
+}
+
+func TestSettingsWasSaved(t *testing.T) {
+	m := NewSettings("", "", "", config.DaemonConfig{})
+
+	if m.WasSaved() {
+		t.Error("WasSaved() should be false initially")
+	}
+
+	// Trigger save with Enter
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	updated, _ := m.Update(msg)
+	m = updated.(SettingsModel)
+
+	if !m.WasSaved() {
+		t.Error("WasSaved() should be true after Enter")
+	}
+}

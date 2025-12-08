@@ -2,12 +2,9 @@ package cmd
 
 import (
 	"fmt"
-	"path/filepath"
+	"io"
 
 	"github.com/spf13/cobra"
-
-	"github.com/adrianpk/snapfig/internal/config"
-	"github.com/adrianpk/snapfig/internal/snapfig"
 )
 
 var restoreCmd = &cobra.Command{
@@ -21,45 +18,44 @@ func init() {
 	rootCmd.AddCommand(restoreCmd)
 }
 
+// runRestore delegates to runRestoreWithOutput which is unit tested.
 func runRestore(cmd *cobra.Command, args []string) error {
-	configDir, err := config.DefaultConfigDir()
-	if err != nil {
-		return fmt.Errorf("failed to get config directory: %w", err)
-	}
-	configPath := filepath.Join(configDir, "config.yml")
+	return runRestoreWithOutput(cmd.OutOrStdout())
+}
 
-	cfg, err := config.Load(configPath)
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	if len(cfg.Watching) == 0 {
-		fmt.Println("No paths configured. Run 'snapfig tui' to select paths.")
-		return nil
-	}
-
-	restorer, err := snapfig.NewRestorer(cfg)
+func runRestoreWithOutput(w io.Writer) error {
+	cfg, configPath, err := loadConfigWithPath()
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("Restoring from vault...")
-	result, err := restorer.Restore()
+	if len(cfg.Watching) == 0 {
+		fmt.Fprintln(w, "No paths configured. Run 'snapfig tui' to select paths.")
+		return nil
+	}
+
+	svc, err := ServiceFactory(cfg, configPath)
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintln(w, "Restoring from vault...")
+	result, err := svc.Restore()
 	if err != nil {
 		return err
 	}
 
 	for _, p := range result.Backups {
-		fmt.Printf("  Backed up: %s\n", p)
+		fmt.Fprintf(w, "  Backed up: %s\n", p)
 	}
 	for _, p := range result.Restored {
-		fmt.Printf("  Restored: %s\n", p)
+		fmt.Fprintf(w, "  Restored: %s\n", p)
 	}
 	for _, p := range result.Skipped {
-		fmt.Printf("  Skipped: %s (not in vault)\n", p)
+		fmt.Fprintf(w, "  Skipped: %s (not in vault)\n", p)
 	}
 
-	fmt.Printf("\nDone. %d restored, %d backed up, %d skipped.\n",
+	fmt.Fprintf(w, "\nDone. %d restored, %d backed up, %d skipped.\n",
 		len(result.Restored), len(result.Backups), len(result.Skipped))
 	return nil
 }

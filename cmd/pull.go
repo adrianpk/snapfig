@@ -2,10 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
-
-	"github.com/adrianpk/snapfig/internal/snapfig"
 )
 
 var pullCmd = &cobra.Command{
@@ -19,13 +18,18 @@ func init() {
 	rootCmd.AddCommand(pullCmd)
 }
 
+// runPull delegates to runPullWithOutput which is unit tested.
 func runPull(cmd *cobra.Command, args []string) error {
-	cfg, err := loadConfig()
+	return runPullWithOutput(cmd.OutOrStdout())
+}
+
+func runPullWithOutput(w io.Writer) error {
+	cfg, configPath, err := loadConfigWithPath()
 	if err != nil {
 		return err
 	}
 
-	vaultDir, err := cfg.VaultDir()
+	svc, err := ServiceFactory(cfg, configPath)
 	if err != nil {
 		return err
 	}
@@ -33,7 +37,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 	remoteURL := cfg.Remote
 	if remoteURL == "" {
 		// Try to get from git
-		hasRemote, url, err := snapfig.HasRemote(vaultDir)
+		hasRemote, url, err := HasRemoteFunc(svc.VaultDir())
 		if err != nil {
 			return err
 		}
@@ -43,16 +47,16 @@ func runPull(cmd *cobra.Command, args []string) error {
 		remoteURL = url
 	}
 
-	fmt.Printf("Pulling from %s...\n", remoteURL)
-	result, err := snapfig.PullVaultWithToken(vaultDir, remoteURL, cfg.GitToken)
+	fmt.Fprintf(w, "Pulling from %s...\n", remoteURL)
+	result, err := svc.Pull()
 	if err != nil {
 		return err
 	}
 
 	if result.Cloned {
-		fmt.Println("Cloned successfully.")
+		fmt.Fprintln(w, "Cloned successfully.")
 	} else {
-		fmt.Println("Pulled successfully.")
+		fmt.Fprintln(w, "Pulled successfully.")
 	}
 	return nil
 }

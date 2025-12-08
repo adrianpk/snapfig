@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -538,5 +539,85 @@ func TestPullVaultExisting(t *testing.T) {
 
 	if result.Cloned {
 		t.Error("result.Cloned should be false for existing repo")
+	}
+}
+
+func TestUrlWithToken(t *testing.T) {
+	tests := []struct {
+		name     string
+		url      string
+		token    string
+		wantURL  string
+		wantSubs []string // substrings that should be in the result
+	}{
+		{
+			name:    "no token returns original URL",
+			url:     "https://github.com/user/repo.git",
+			token:   "",
+			wantURL: "https://github.com/user/repo.git",
+		},
+		{
+			name:    "SSH URL with token converts to HTTPS",
+			url:     "git@github.com:user/repo.git",
+			token:   "ghp_test123",
+			wantURL: "https://x-access-token:ghp_test123@github.com/user/repo.git",
+		},
+		{
+			name:     "HTTPS URL with token adds auth",
+			url:      "https://github.com/user/repo.git",
+			token:    "ghp_test456",
+			wantSubs: []string{"x-access-token", "ghp_test456", "github.com"},
+		},
+		{
+			name:    "unknown format returns original",
+			url:     "file:///local/path",
+			token:   "token123",
+			wantURL: "file:///local/path",
+		},
+		{
+			name:    "empty URL with token",
+			url:     "",
+			token:   "token",
+			wantURL: "",
+		},
+		{
+			name:     "HTTPS URL with path components",
+			url:      "https://gitlab.com/group/subgroup/repo.git",
+			token:    "glpat_token",
+			wantSubs: []string{"x-access-token", "glpat_token", "gitlab.com/group/subgroup/repo.git"},
+		},
+		{
+			name:    "SSH URL with different host",
+			url:     "git@gitlab.com:user/project.git",
+			token:   "glpat_abc",
+			wantURL: "https://x-access-token:glpat_abc@gitlab.com/user/project.git",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := urlWithToken(tt.url, tt.token)
+
+			if tt.wantURL != "" {
+				if result != tt.wantURL {
+					t.Errorf("urlWithToken() = %q, want %q", result, tt.wantURL)
+				}
+			}
+
+			for _, sub := range tt.wantSubs {
+				if !strings.Contains(result, sub) {
+					t.Errorf("urlWithToken() = %q, should contain %q", result, sub)
+				}
+			}
+		})
+	}
+}
+
+func TestUrlWithTokenParseError(t *testing.T) {
+	// Test with malformed HTTPS URL that will fail url.Parse
+	result := urlWithToken("https://[::1]:invalid-port/path", "token")
+	// Should return original URL on parse error
+	if result != "https://[::1]:invalid-port/path" {
+		t.Errorf("urlWithToken() should return original URL on parse error, got %q", result)
 	}
 }

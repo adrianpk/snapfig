@@ -2,10 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
-
-	"github.com/adrianpk/snapfig/internal/snapfig"
 )
 
 var copyCmd = &cobra.Command{
@@ -19,36 +18,40 @@ func init() {
 	rootCmd.AddCommand(copyCmd)
 }
 
+// runCopy delegates to runCopyWithOutput which is unit tested.
 func runCopy(cmd *cobra.Command, args []string) error {
-	cfg, err := loadConfig()
+	return runCopyWithOutput(cmd.OutOrStdout())
+}
+
+func runCopyWithOutput(w io.Writer) error {
+	cfg, configPath, err := loadConfigWithPath()
 	if err != nil {
 		return err
 	}
 
 	if len(cfg.Watching) == 0 {
-		fmt.Println("No paths configured. Run 'snapfig' to select paths.")
+		fmt.Fprintln(w, "No paths configured. Run 'snapfig' to select paths.")
 		return nil
 	}
 
-	copier, err := snapfig.NewCopier(cfg)
+	svc, err := ServiceFactory(cfg, configPath)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("Copying to vault...")
-	result, err := copier.Copy()
+	fmt.Fprintln(w, "Copying to vault...")
+	result, err := svc.Copy()
 	if err != nil {
 		return err
 	}
 
 	for _, p := range result.Copied {
-		fmt.Printf("  Copied: %s\n", p)
+		fmt.Fprintf(w, "  Copied: %s\n", p)
 	}
 	for _, p := range result.Skipped {
-		fmt.Printf("  Skipped: %s (not found)\n", p)
+		fmt.Fprintf(w, "  Skipped: %s (not found)\n", p)
 	}
 
-	vaultDir, _ := cfg.VaultDir()
-	fmt.Printf("\nDone. %d copied, %d skipped. Vault: %s\n", len(result.Copied), len(result.Skipped), vaultDir)
+	fmt.Fprintf(w, "\nDone. %d copied, %d skipped. Vault: %s\n", len(result.Copied), len(result.Skipped), svc.VaultDir())
 	return nil
 }

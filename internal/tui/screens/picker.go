@@ -138,6 +138,8 @@ func (m PickerModel) Init() tea.Cmd {
 	return initPicker
 }
 
+// initPicker is called asynchronously by bubbletea to initialize the picker.
+// Async tea.Cmd; initMsg handling tested in Update tests.
 func initPicker() tea.Msg {
 	home, err := os.UserHomeDir()
 	if err != nil {

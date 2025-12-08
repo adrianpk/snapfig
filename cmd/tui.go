@@ -24,6 +24,8 @@ func init() {
 	rootCmd.AddCommand(tuiCmd)
 }
 
+// runTUI launches the interactive terminal interface.
+// Requires interactive terminal; TUI logic tested via model_test.go.
 func runTUI(cmd *cobra.Command, args []string) error {
 	configDir, err := config.DefaultConfigDir()
 	if err != nil {

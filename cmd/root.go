@@ -26,6 +26,7 @@ into a versioned store without requiring symlinks.`,
 }
 
 // Execute runs the root command.
+// Entry point; individual commands tested via *WithOutput variants.
 func Execute() error {
 	return rootCmd.Execute()
 }
@@ -58,17 +59,17 @@ func initConfig() {
 	viper.ReadInConfig()
 }
 
-// loadConfig loads the configuration from the default location.
-func loadConfig() (*config.Config, error) {
-	configDir, err := config.DefaultConfigDir()
+// loadConfigWithPath loads the configuration and returns both config and path.
+func loadConfigWithPath() (*config.Config, string, error) {
+	configDir, err := DefaultConfigDirFunc()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get config directory: %w", err)
+		return nil, "", fmt.Errorf("failed to get config directory: %w", err)
 	}
 	configPath := filepath.Join(configDir, "config.yml")
 
-	cfg, err := config.Load(configPath)
+	cfg, err := ConfigLoader(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
+		return nil, "", fmt.Errorf("failed to load config: %w", err)
 	}
-	return cfg, nil
+	return cfg, configPath, nil
 }

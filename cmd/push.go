@@ -2,10 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
-
-	"github.com/adrianpk/snapfig/internal/snapfig"
 )
 
 var pushCmd = &cobra.Command{
@@ -19,30 +18,35 @@ func init() {
 	rootCmd.AddCommand(pushCmd)
 }
 
+// runPush delegates to runPushWithOutput which is unit tested.
 func runPush(cmd *cobra.Command, args []string) error {
-	cfg, err := loadConfig()
+	return runPushWithOutput(cmd.OutOrStdout())
+}
+
+func runPushWithOutput(w io.Writer) error {
+	cfg, configPath, err := loadConfigWithPath()
 	if err != nil {
 		return err
 	}
 
-	vaultDir, err := cfg.VaultDir()
+	svc, err := ServiceFactory(cfg, configPath)
 	if err != nil {
 		return err
 	}
 
-	hasRemote, url, err := snapfig.HasRemote(vaultDir)
+	hasRemote, url, err := HasRemoteFunc(svc.VaultDir())
 	if err != nil {
 		return err
 	}
 	if !hasRemote {
-		return fmt.Errorf("no remote configured. Run: cd %s && git remote add origin <url>", vaultDir)
+		return fmt.Errorf("no remote configured. Run: cd %s && git remote add origin <url>", svc.VaultDir())
 	}
 
-	fmt.Printf("Pushing to %s...\n", url)
-	if err := snapfig.PushVaultWithToken(vaultDir, cfg.GitToken); err != nil {
+	fmt.Fprintf(w, "Pushing to %s...\n", url)
+	if err := svc.Push(); err != nil {
 		return err
 	}
 
-	fmt.Println("Done.")
+	fmt.Fprintln(w, "Done.")
 	return nil
 }

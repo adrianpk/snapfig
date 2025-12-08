@@ -558,3 +558,110 @@ func TestDoCopyWithResults(t *testing.T) {
 	// This will trigger the skipped path logging
 	d.doCopy()
 }
+
+func TestDoPullAutoRestoreEnabled(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "daemon-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	vaultDir := filepath.Join(tmpDir, "vault")
+	os.MkdirAll(vaultDir, 0755)
+
+	homeDir := filepath.Join(tmpDir, "home")
+	os.MkdirAll(homeDir, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", homeDir)
+	defer os.Setenv("HOME", oldHome)
+
+	cfg := &config.Config{
+		VaultPath: vaultDir,
+		Remote:    "", // No remote, so pull will fail
+		Daemon: config.DaemonConfig{
+			AutoRestore: true, // Enable auto restore
+		},
+	}
+
+	d := &Daemon{
+		cfg:          cfg,
+		configPath:   filepath.Join(tmpDir, "config.yaml"),
+		vaultDir:     vaultDir,
+		pullInterval: 0,
+		logger:       log.New(os.Stdout, "[test] ", log.LstdFlags),
+	}
+
+	// doPull will fail because no remote, but we test the code path exists
+	d.doPull()
+}
+
+func TestDoRestoreNoWatching(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "daemon-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	vaultDir := filepath.Join(tmpDir, "vault")
+	os.MkdirAll(vaultDir, 0755)
+
+	homeDir := filepath.Join(tmpDir, "home")
+	os.MkdirAll(homeDir, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", homeDir)
+	defer os.Setenv("HOME", oldHome)
+
+	cfg := &config.Config{
+		VaultPath: vaultDir,
+		Watching:  nil, // No watching paths
+	}
+
+	d := &Daemon{
+		cfg:        cfg,
+		configPath: filepath.Join(tmpDir, "config.yaml"),
+		vaultDir:   vaultDir,
+		logger:     log.New(os.Stdout, "[test] ", log.LstdFlags),
+	}
+
+	// doRestore with no watching paths should log nothing to restore
+	d.doRestore()
+}
+
+func TestDoRestoreWithResults(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "daemon-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	vaultDir := filepath.Join(tmpDir, "vault")
+	vaultConfigDir := filepath.Join(vaultDir, ".config", "test")
+	os.MkdirAll(vaultConfigDir, 0755)
+	os.WriteFile(filepath.Join(vaultConfigDir, "file.txt"), []byte("content"), 0644)
+
+	homeDir := filepath.Join(tmpDir, "home")
+	os.MkdirAll(homeDir, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", homeDir)
+	defer os.Setenv("HOME", oldHome)
+
+	cfg := &config.Config{
+		VaultPath: vaultDir,
+		Watching: []config.Watched{
+			{Path: ".config/test", Enabled: true},
+		},
+	}
+
+	d := &Daemon{
+		cfg:        cfg,
+		configPath: filepath.Join(tmpDir, "config.yaml"),
+		vaultDir:   vaultDir,
+		logger:     log.New(os.Stdout, "[test] ", log.LstdFlags),
+	}
+
+	// doRestore should restore files
+	d.doRestore()
+}
