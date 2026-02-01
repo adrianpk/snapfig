@@ -11,30 +11,37 @@ type MockService struct {
 	vaultDir string
 
 	// Function hooks for mocking behavior
-	CopyFunc              func() (*CopyResult, error)
-	RestoreFunc           func() (*RestoreResult, error)
-	RestoreSelectiveFunc  func(paths []string) (*RestoreResult, error)
-	ListVaultEntriesFunc  func() ([]VaultEntry, error)
-	PushFunc              func() error
-	PullFunc              func() (*PullResult, error)
-	SetRemoteFunc         func(url string) error
-	SaveConfigFunc        func(path string) error
-	UpdateWatchingFunc    func(watching []config.Watched)
+	CopyFunc                   func() (*CopyResult, error)
+	RestoreFunc                func() (*RestoreResult, error)
+	RestoreSelectiveFunc       func(paths []string) (*RestoreResult, error)
+	ListVaultEntriesFunc       func() ([]VaultEntry, error)
+	PushFunc                   func() error
+	PullFunc                   func() (*PullResult, error)
+	SetRemoteFunc              func(url string) error
+	SaveConfigFunc             func(path string) error
+	UpdateWatchingFunc         func(watching []config.Watched)
+	LoadManifestFunc           func() (*Manifest, error)
+	HasManifestFunc            func() bool
+	SyncConfigFromManifestFunc func() error
 
 	// Call tracking
-	CopyCalled             bool
-	RestoreCalled          bool
-	RestoreSelectiveCalled bool
-	RestoreSelectivePaths  []string
-	ListVaultEntriesCalled bool
-	PushCalled             bool
-	PullCalled             bool
-	SetRemoteCalled        bool
-	SetRemoteURL           string
-	SaveConfigCalled       bool
-	SaveConfigPath         string
-	UpdateWatchingCalled   bool
-	UpdateWatchingValue    []config.Watched
+	CopyCalled                   bool
+	RestoreCalled                bool
+	RestoreSelectiveCalled       bool
+	RestoreSelectivePaths        []string
+	ListVaultEntriesCalled       bool
+	PushCalled                   bool
+	PullCalled                   bool
+	SetRemoteCalled              bool
+	SetRemoteURL                 string
+	SaveConfigCalled             bool
+	SaveConfigPath               string
+	UpdateWatchingCalled         bool
+	UpdateWatchingValue          []config.Watched
+	LoadManifestCalled           bool
+	HasManifestCalled            bool
+	HasManifestValue             bool
+	SyncConfigFromManifestCalled bool
 }
 
 // NewMockService creates a new MockService with default behavior.
@@ -161,6 +168,36 @@ func (m *MockService) UpdateWatching(watching []config.Watched) {
 	}
 }
 
+// LoadManifest mocks the LoadManifest operation.
+func (m *MockService) LoadManifest() (*Manifest, error) {
+	m.LoadManifestCalled = true
+	if m.LoadManifestFunc != nil {
+		return m.LoadManifestFunc()
+	}
+	return &Manifest{
+		Version: 1,
+		Entries: []ManifestEntry{},
+	}, nil
+}
+
+// HasManifest mocks the HasManifest operation.
+func (m *MockService) HasManifest() bool {
+	m.HasManifestCalled = true
+	if m.HasManifestFunc != nil {
+		return m.HasManifestFunc()
+	}
+	return m.HasManifestValue
+}
+
+// SyncConfigFromManifest mocks the SyncConfigFromManifest operation.
+func (m *MockService) SyncConfigFromManifest() error {
+	m.SyncConfigFromManifestCalled = true
+	if m.SyncConfigFromManifestFunc != nil {
+		return m.SyncConfigFromManifestFunc()
+	}
+	return nil
+}
+
 // Reset clears all call tracking state.
 func (m *MockService) Reset() {
 	m.CopyCalled = false
@@ -176,4 +213,8 @@ func (m *MockService) Reset() {
 	m.SaveConfigPath = ""
 	m.UpdateWatchingCalled = false
 	m.UpdateWatchingValue = nil
+	m.LoadManifestCalled = false
+	m.HasManifestCalled = false
+	m.HasManifestValue = false
+	m.SyncConfigFromManifestCalled = false
 }

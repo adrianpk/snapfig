@@ -577,8 +577,10 @@ func (m *Model) doBackup() tea.Cmd {
 }
 
 // doSync performs pull + restore in one step.
+// On a new machine (empty config.Watching), it loads paths from the vault manifest.
 func (m *Model) doSync() tea.Cmd {
 	svc := m.service
+	configPath := m.configPath
 	return func() tea.Msg {
 		// First, pull (or clone)
 		pullResult, err := svc.Pull()
@@ -586,10 +588,22 @@ func (m *Model) doSync() tea.Cmd {
 			return SyncDoneMsg{err: err}
 		}
 
-		// Then restore
 		cfg := svc.Config()
+
+		// If no paths configured locally, try to load from vault manifest
+		// This enables setup on a new machine after cloning
 		if len(cfg.Watching) == 0 {
-			return SyncDoneMsg{err: fmt.Errorf("no paths configured")}
+			if svc.HasManifest() {
+				if err := svc.SyncConfigFromManifest(); err != nil {
+					return SyncDoneMsg{err: fmt.Errorf("failed to load manifest: %w", err)}
+				}
+				// Save the reconstructed config
+				if err := svc.SaveConfig(configPath); err != nil {
+					return SyncDoneMsg{err: fmt.Errorf("failed to save config from manifest: %w", err)}
+				}
+			} else {
+				return SyncDoneMsg{err: fmt.Errorf("no paths configured and no manifest in vault")}
+			}
 		}
 
 		restoreResult, err := svc.Restore()

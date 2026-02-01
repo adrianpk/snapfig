@@ -589,9 +589,23 @@ func TestCopyCreatesManifest(t *testing.T) {
 		t.Fatalf("Copy() error: %v", err)
 	}
 
-	// Verify manifest was created
-	manifestPath := filepath.Join(snapfigDir, "manifest.md")
+	// Verify manifest was created inside vault (YAML format)
+	manifestPath := filepath.Join(vaultDir, "manifest.yml")
 	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
-		t.Error("Copy() did not create manifest.md")
+		t.Error("Copy() did not create manifest.yml inside vault")
+	}
+
+	// Verify manifest can be loaded and contains correct data
+	manifest, err := LoadManifest(vaultDir)
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
+	}
+
+	if len(manifest.Entries) != 1 {
+		t.Errorf("expected 1 manifest entry, got %d", len(manifest.Entries))
+	}
+
+	if manifest.Entries[0].Path != ".testrc" {
+		t.Errorf("expected entry path .testrc, got %s", manifest.Entries[0].Path)
 	}
 }

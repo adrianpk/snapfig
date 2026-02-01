@@ -117,12 +117,28 @@ func (c *Copier) Copy() (*CopyResult, error) {
 	return result, nil
 }
 
-// writeManifest creates a markdown manifest of copied items.
+// writeManifest creates both files inside the vault:
+// - manifest.yml: for config reconstruction on new machines
+// - README.md: quick overview of what's backed up
+// Both are versioned with git and synced with push/pull.
 func (c *Copier) writeManifest() error {
-	manifestPath := filepath.Join(c.snapfigDir, "manifest.md")
+	entries := FromWatching(c.cfg.Watching, c.copiedItems)
+
+	// Write YAML manifest (for machine use)
+	if err := WriteManifest(c.vaultDir, entries); err != nil {
+		return err
+	}
+
+	// Write README
+	return c.writeReadme()
+}
+
+// writeReadme creates a human-readable README for the vault.
+func (c *Copier) writeReadme() error {
+	readmePath := filepath.Join(c.vaultDir, "README.md")
 
 	var content string
-	content += "# Snapfig Manifest\n\n"
+	content += "# Snapfig Backup\n\n"
 	content += fmt.Sprintf("Last updated: %s\n\n", time.Now().Format("2006-01-02 15:04:05"))
 	content += "## Backed Up Paths\n\n"
 	content += "| Path | Type | Git Mode |\n"
@@ -147,5 +163,5 @@ func (c *Copier) writeManifest() error {
 	content += fmt.Sprintf("\n## Summary\n\n- **Total items**: %d\n", len(c.copiedItems))
 	content += fmt.Sprintf("- **Vault location**: `%s`\n", c.vaultDir)
 
-	return os.WriteFile(manifestPath, []byte(content), 0644)
+	return os.WriteFile(readmePath, []byte(content), 0644)
 }

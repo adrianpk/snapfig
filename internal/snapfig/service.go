@@ -43,6 +43,16 @@ type Service interface {
 
 	// UpdateWatching updates the watching list in config.
 	UpdateWatching(watching []config.Watched)
+
+	// LoadManifest loads the manifest from the vault.
+	LoadManifest() (*Manifest, error)
+
+	// HasManifest checks if a manifest exists in the vault.
+	HasManifest() bool
+
+	// SyncConfigFromManifest updates config.Watching from the vault manifest.
+	// This is used on new machines to reconstruct the config after pull.
+	SyncConfigFromManifest() error
 }
 
 // DefaultService is the production implementation of Service.
@@ -138,6 +148,28 @@ func (s *DefaultService) VaultDir() string {
 // UpdateWatching updates the watching list in config.
 func (s *DefaultService) UpdateWatching(watching []config.Watched) {
 	s.cfg.Watching = watching
+}
+
+// LoadManifest loads the manifest from the vault.
+func (s *DefaultService) LoadManifest() (*Manifest, error) {
+	return LoadManifest(s.vaultDir)
+}
+
+// HasManifest checks if a manifest exists in the vault.
+func (s *DefaultService) HasManifest() bool {
+	return ManifestExists(s.vaultDir)
+}
+
+// SyncConfigFromManifest updates config.Watching from the vault manifest.
+// This is used on new machines to reconstruct the config after pull.
+func (s *DefaultService) SyncConfigFromManifest() error {
+	manifest, err := LoadManifest(s.vaultDir)
+	if err != nil {
+		return fmt.Errorf("failed to load manifest: %w", err)
+	}
+
+	s.cfg.Watching = manifest.ToWatching()
+	return nil
 }
 
 // DefaultConfigPath returns the default config path.

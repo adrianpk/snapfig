@@ -1067,3 +1067,176 @@ func TestRestorePickerEscReturnsToMain(t *testing.T) {
 // Functions that delegate to picker.Selected() before picker initialization
 // will panic, which is expected behavior (programmer error - should not call
 // before Init completes). The async Init pattern is standard in bubbletea.
+
+// TestDoSyncWithManifest tests the sync flow when config is empty but manifest exists.
+// This simulates setting up on a new machine.
+func TestDoSyncWithManifest(t *testing.T) {
+	// Empty config - simulates new machine
+	cfg := &config.Config{Git: config.GitModeDisable, Watching: nil}
+	mockSvc := snapfig.NewMockService(cfg)
+
+	// Mock: pull succeeds
+	mockSvc.PullFunc = func() (*snapfig.PullResult, error) {
+		return &snapfig.PullResult{Cloned: true}, nil
+	}
+
+	// Mock: manifest exists
+	mockSvc.HasManifestValue = true
+
+	// Mock: SyncConfigFromManifest populates config
+	mockSvc.SyncConfigFromManifestFunc = func() error {
+		cfg.Watching = []config.Watched{
+			{Path: ".config/nvim", Git: config.GitModeDisable, Enabled: true},
+			{Path: ".zshrc", Git: config.GitModeRemove, Enabled: true},
+		}
+		return nil
+	}
+
+	// Mock: restore succeeds
+	mockSvc.RestoreFunc = func() (*snapfig.RestoreResult, error) {
+		return &snapfig.RestoreResult{
+			Restored:     []string{".config/nvim", ".zshrc"},
+			FilesUpdated: 10,
+			FilesSkipped: 5,
+		}, nil
+	}
+
+	model := NewWithService(mockSvc, "/tmp/config.yaml", false)
+
+	cmd := model.doSync()
+	msg := cmd()
+	syncDone, ok := msg.(SyncDoneMsg)
+
+	if !ok {
+		t.Fatal("doSync should return SyncDoneMsg")
+	}
+
+	if syncDone.err != nil {
+		t.Errorf("unexpected error: %v", syncDone.err)
+	}
+
+	if !syncDone.cloned {
+		t.Error("expected cloned=true for fresh clone")
+	}
+
+	if syncDone.filesUpdated != 10 {
+		t.Errorf("filesUpdated = %d, want 10", syncDone.filesUpdated)
+	}
+
+	// Verify the flow: pull was called
+	if !mockSvc.PullCalled {
+		t.Error("Pull should have been called")
+	}
+
+	// Verify HasManifest was checked
+	if !mockSvc.HasManifestCalled {
+		t.Error("HasManifest should have been called")
+	}
+
+	// Verify SyncConfigFromManifest was called (because Watching was empty)
+	if !mockSvc.SyncConfigFromManifestCalled {
+		t.Error("SyncConfigFromManifest should have been called when Watching is empty")
+	}
+
+	// Verify SaveConfig was called (to persist the manifest-loaded config)
+	if !mockSvc.SaveConfigCalled {
+		t.Error("SaveConfig should have been called after loading from manifest")
+	}
+
+	// Verify restore was called
+	if !mockSvc.RestoreCalled {
+		t.Error("Restore should have been called")
+	}
+}
+
+// TestDoSyncNoManifestNoConfig tests the sync flow when both config and manifest are empty.
+func TestDoSyncNoManifestNoConfig(t *testing.T) {
+	// Empty config - simulates new machine
+	cfg := &config.Config{Git: config.GitModeDisable, Watching: nil}
+	mockSvc := snapfig.NewMockService(cfg)
+
+	// Mock: pull succeeds
+	mockSvc.PullFunc = func() (*snapfig.PullResult, error) {
+		return &snapfig.PullResult{Cloned: true}, nil
+	}
+
+	// Mock: NO manifest exists
+	mockSvc.HasManifestValue = false
+
+	model := NewWithService(mockSvc, "/tmp/config.yaml", false)
+
+	cmd := model.doSync()
+	msg := cmd()
+	syncDone, ok := msg.(SyncDoneMsg)
+
+	if !ok {
+		t.Fatal("doSync should return SyncDoneMsg")
+	}
+
+	// Should error because no config and no manifest
+	if syncDone.err == nil {
+		t.Error("doSync should return error when no paths configured and no manifest")
+	}
+
+	expectedErr := "no paths configured and no manifest in vault"
+	if syncDone.err.Error() != expectedErr {
+		t.Errorf("error = %q, want %q", syncDone.err.Error(), expectedErr)
+	}
+}
+
+// TestDoSyncWithExistingConfig tests that sync doesn't overwrite existing config.
+func TestDoSyncWithExistingConfig(t *testing.T) {
+	// Config already has watching paths - should NOT load from manifest
+	cfg := &config.Config{
+		Git: config.GitModeDisable,
+		Watching: []config.Watched{
+			{Path: ".bashrc", Enabled: true},
+		},
+	}
+	mockSvc := snapfig.NewMockService(cfg)
+
+	// Mock: pull succeeds
+	mockSvc.PullFunc = func() (*snapfig.PullResult, error) {
+		return &snapfig.PullResult{Cloned: false}, nil
+	}
+
+	// Mock: manifest exists (but should NOT be used since config has paths)
+	mockSvc.HasManifestValue = true
+
+	// Mock: restore succeeds
+	mockSvc.RestoreFunc = func() (*snapfig.RestoreResult, error) {
+		return &snapfig.RestoreResult{
+			Restored:     []string{".bashrc"},
+			FilesUpdated: 1,
+		}, nil
+	}
+
+	model := NewWithService(mockSvc, "/tmp/config.yaml", false)
+
+	cmd := model.doSync()
+	msg := cmd()
+	syncDone, ok := msg.(SyncDoneMsg)
+
+	if !ok {
+		t.Fatal("doSync should return SyncDoneMsg")
+	}
+
+	if syncDone.err != nil {
+		t.Errorf("unexpected error: %v", syncDone.err)
+	}
+
+	// HasManifest should NOT be called because config already has paths
+	if mockSvc.HasManifestCalled {
+		t.Error("HasManifest should NOT be called when config already has paths")
+	}
+
+	// SyncConfigFromManifest should NOT be called
+	if mockSvc.SyncConfigFromManifestCalled {
+		t.Error("SyncConfigFromManifest should NOT be called when config already has paths")
+	}
+
+	// Restore should still be called
+	if !mockSvc.RestoreCalled {
+		t.Error("Restore should have been called")
+	}
+}
