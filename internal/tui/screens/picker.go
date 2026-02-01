@@ -23,6 +23,17 @@ const (
 	StateDisable                    // [g] selected, disable .git
 )
 
+// SyncStatus represents the synchronization state of a path.
+type SyncStatus int
+
+const (
+	SyncUntracked SyncStatus = iota // not in manifest
+	SyncSynced                      // local + vault + manifest
+	SyncNeedsBackup                 // local + manifest, missing from vault
+	SyncNeedsRestore                // vault + manifest, missing from local
+	SyncOrphan                      // only in manifest
+)
+
 type node struct {
 	name      string
 	path      string
@@ -38,19 +49,21 @@ type node struct {
 
 // PickerModel handles directory selection with tree navigation.
 type PickerModel struct {
-	root        *node
-	flat        []*node
-	cursor      int
-	home        string
-	err         error
-	loaded      bool
-	wellKnown   map[string]bool
-	preselected map[string]SelectState // from config
-	width       int
-	height      int
-	demoMode    bool
-	demoPaths   map[string]bool
-	vaultPath   string // relative to home, to exclude from listing
+	root          *node
+	flat          []*node
+	cursor        int
+	home          string
+	err           error
+	loaded        bool
+	wellKnown     map[string]bool
+	preselected   map[string]SelectState // from config
+	width         int
+	height        int
+	demoMode      bool
+	demoPaths     map[string]bool
+	vaultPath     string          // relative to home, to exclude from listing
+	vaultDir      string          // full path to vault directory
+	manifestPaths map[string]bool // paths listed in manifest
 }
 
 type initMsg struct {
@@ -112,6 +125,11 @@ func getDemoPaths() map[string]bool {
 
 // NewPicker creates a new tree picker screen with optional preselected paths from config.
 func NewPicker(cfg *config.Config, demoMode bool) PickerModel {
+	return NewPickerWithSync(cfg, demoMode, "", nil)
+}
+
+// NewPickerWithSync creates a picker with sync status information.
+func NewPickerWithSync(cfg *config.Config, demoMode bool, vaultDir string, manifestPaths []string) PickerModel {
 	preselected := make(map[string]SelectState)
 	var vaultPath string
 	if cfg != nil {
@@ -125,9 +143,12 @@ func NewPicker(cfg *config.Config, demoMode bool) PickerModel {
 			}
 		}
 		// Get vault path relative to home to exclude from listing
-		if vaultDir, err := cfg.VaultDir(); err == nil {
+		if cfgVaultDir, err := cfg.VaultDir(); err == nil {
+			if vaultDir == "" {
+				vaultDir = cfgVaultDir
+			}
 			if home, err := os.UserHomeDir(); err == nil {
-				if rel, err := filepath.Rel(home, vaultDir); err == nil {
+				if rel, err := filepath.Rel(home, cfgVaultDir); err == nil {
 					// Get the top-level directory (e.g., ".snapfig" from ".snapfig/vault")
 					parts := strings.Split(rel, string(os.PathSeparator))
 					if len(parts) > 0 {
@@ -145,11 +166,20 @@ func NewPicker(cfg *config.Config, demoMode bool) PickerModel {
 	if demoMode {
 		demoPaths = getDemoPaths()
 	}
+
+	// Build manifest paths map
+	manifestMap := make(map[string]bool)
+	for _, p := range manifestPaths {
+		manifestMap[p] = true
+	}
+
 	return PickerModel{
-		preselected: preselected,
-		demoMode:    demoMode,
-		demoPaths:   demoPaths,
-		vaultPath:   vaultPath,
+		preselected:   preselected,
+		demoMode:      demoMode,
+		demoPaths:     demoPaths,
+		vaultPath:     vaultPath,
+		vaultDir:      vaultDir,
+		manifestPaths: manifestMap,
 	}
 }
 
@@ -530,6 +560,13 @@ func (m PickerModel) renderNode(n *node, isCursor bool) string {
 		line += " ★"
 	}
 
+	// Add sync status tag
+	status := m.getSyncStatus(n.path)
+	tag := syncStatusTag(status)
+	if tag != "" {
+		line += " " + tag
+	}
+
 	if isCursor {
 		return styles.Selected.Render(line)
 	} else if n.state != StateNone {
@@ -538,6 +575,69 @@ func (m PickerModel) renderNode(n *node, isCursor bool) string {
 		return styles.Subtitle.Render(line)
 	}
 	return styles.Dimmed.Render(line)
+}
+
+// getSyncStatus calculates the sync status for a path.
+func (m PickerModel) getSyncStatus(path string) SyncStatus {
+	if len(m.manifestPaths) == 0 {
+		return SyncUntracked
+	}
+
+	inManifest := m.manifestPaths[path]
+	if !inManifest {
+		return SyncUntracked
+	}
+
+	// Check if exists in vault
+	inVault := false
+	if m.vaultDir != "" {
+		vaultPath := filepath.Join(m.vaultDir, path)
+		if _, err := os.Stat(vaultPath); err == nil {
+			inVault = true
+		}
+	}
+
+	// Check if exists locally (we know it does if it's in the picker,
+	// but for completeness we check anyway)
+	inLocal := false
+	if m.home != "" {
+		localPath := filepath.Join(m.home, path)
+		if _, err := os.Stat(localPath); err == nil {
+			inLocal = true
+		}
+	}
+
+	// Determine status
+	if inLocal && inVault && inManifest {
+		return SyncSynced
+	}
+	if inLocal && inManifest && !inVault {
+		return SyncNeedsBackup
+	}
+	if !inLocal && inVault && inManifest {
+		return SyncNeedsRestore
+	}
+	if !inLocal && !inVault && inManifest {
+		return SyncOrphan
+	}
+
+	return SyncUntracked
+}
+
+// syncStatusTag returns the display tag for a sync status.
+func syncStatusTag(status SyncStatus) string {
+	switch status {
+	case SyncSynced:
+		return "[synced]"
+	case SyncNeedsBackup:
+		return "[backup]"
+	case SyncNeedsRestore:
+		return "[restore]"
+	case SyncOrphan:
+		return "[orphan]"
+	default:
+		return ""
+	}
 }
 
 // Selection represents a selected path with its git mode.

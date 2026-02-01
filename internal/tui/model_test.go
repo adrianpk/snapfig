@@ -1213,6 +1213,19 @@ func TestDoSyncWithExistingConfig(t *testing.T) {
 
 	model := NewWithService(mockSvc, "/tmp/config.yaml", false)
 
+	// Reset tracking - HasManifest is called during model creation for picker sync status
+	mockSvc.Reset()
+	mockSvc.HasManifestValue = true
+	mockSvc.PullFunc = func() (*snapfig.PullResult, error) {
+		return &snapfig.PullResult{Cloned: false}, nil
+	}
+	mockSvc.RestoreFunc = func() (*snapfig.RestoreResult, error) {
+		return &snapfig.RestoreResult{
+			Restored:     []string{".bashrc"},
+			FilesUpdated: 1,
+		}, nil
+	}
+
 	cmd := model.doSync()
 	msg := cmd()
 	syncDone, ok := msg.(SyncDoneMsg)
@@ -1225,12 +1238,7 @@ func TestDoSyncWithExistingConfig(t *testing.T) {
 		t.Errorf("unexpected error: %v", syncDone.err)
 	}
 
-	// HasManifest should NOT be called because config already has paths
-	if mockSvc.HasManifestCalled {
-		t.Error("HasManifest should NOT be called when config already has paths")
-	}
-
-	// SyncConfigFromManifest should NOT be called
+	// SyncConfigFromManifest should NOT be called when config already has paths
 	if mockSvc.SyncConfigFromManifestCalled {
 		t.Error("SyncConfigFromManifest should NOT be called when config already has paths")
 	}

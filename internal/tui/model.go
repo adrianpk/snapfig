@@ -108,9 +108,20 @@ func New(cfg *config.Config, configPath string, demoMode bool) Model {
 // This allows for dependency injection in tests.
 func NewWithService(svc snapfig.Service, configPath string, demoMode bool) Model {
 	cfg := svc.Config()
+
+	// Get manifest paths for sync status display
+	var manifestPaths []string
+	if svc.HasManifest() {
+		if manifest, err := svc.LoadManifest(); err == nil {
+			for _, entry := range manifest.Entries {
+				manifestPaths = append(manifestPaths, entry.Path)
+			}
+		}
+	}
+
 	return Model{
 		current:    screenPicker,
-		picker:     screens.NewPicker(cfg, demoMode),
+		picker:     screens.NewPickerWithSync(cfg, demoMode, svc.VaultDir(), manifestPaths),
 		service:    svc,
 		configPath: configPath,
 		demoMode:   demoMode,
