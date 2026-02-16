@@ -1,12 +1,15 @@
 package snapfig
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/adrianpk/snapfig/internal/config"
 )
+
+const symlinkMarkerExt = ".snapfig-symlink"
 
 // copyPath copies a file or directory from src to dst, handling .git according to mode.
 // Uses smart copy: only copies files that have changed (by ModTime/Size).
@@ -50,11 +53,13 @@ func (c *Copier) copyDir(src, dst string, gitMode config.GitMode, result *CopyRe
 		if name == ".git" && entry.IsDir() {
 			switch gitMode {
 			case config.GitModeRemove:
-				// .git is skipped, don't track it
 				continue
 			case config.GitModeDisable:
 				dstName = ".git_disabled"
 			}
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			dstName = name + symlinkMarkerExt
 		}
 		srcEntries[dstName] = true
 	}
@@ -68,6 +73,14 @@ func (c *Copier) copyDir(src, dst string, gitMode config.GitMode, result *CopyRe
 	for _, entry := range entries {
 		srcPath := filepath.Join(src, entry.Name())
 		dstPath := filepath.Join(dst, entry.Name())
+
+		// Handle symlinks: create marker file with ln command
+		if entry.Type()&os.ModeSymlink != 0 {
+			if err := c.copySymlinkMarker(srcPath, dstPath+symlinkMarkerExt, entry.Name(), result); err != nil {
+				return err
+			}
+			continue
+		}
 
 		// Handle .git directories
 		if entry.Name() == ".git" && entry.IsDir() {
@@ -117,6 +130,32 @@ func (c *Copier) removeStale(dst string, srcEntries map[string]bool, result *Cop
 		}
 	}
 
+	return nil
+}
+
+func (c *Copier) copySymlinkMarker(srcPath, dstPath, name string, result *CopyResult) error {
+	target, err := os.Readlink(srcPath)
+	if err != nil {
+		return err
+	}
+
+	content := fmt.Sprintf("ln -s %s %s\n", target, name)
+
+	existing, err := os.ReadFile(dstPath)
+	if err == nil && string(existing) == content {
+		result.FilesSkipped++
+		return nil
+	}
+
+	if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(dstPath, []byte(content), 0644); err != nil {
+		return err
+	}
+
+	result.FilesUpdated++
 	return nil
 }
 

@@ -609,3 +609,68 @@ func TestCopyCreatesManifest(t *testing.T) {
 		t.Errorf("expected entry path .testrc, got %s", manifest.Entries[0].Path)
 	}
 }
+
+func TestCopySymlinkCreatesMarker(t *testing.T) {
+	setupTestGitConfig(t)
+
+	tmpDir, err := os.MkdirTemp("", "copier-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	homeDir := filepath.Join(tmpDir, "home")
+	vaultDir := filepath.Join(tmpDir, "vault")
+
+	srcDir := filepath.Join(homeDir, ".config", "themes")
+	os.MkdirAll(srcDir, 0755)
+
+	targetDir := filepath.Join(tmpDir, "external", "catppuccin")
+	os.MkdirAll(targetDir, 0755)
+	os.WriteFile(filepath.Join(targetDir, "theme.yml"), []byte("colors: mocha"), 0644)
+
+	symlinkPath := filepath.Join(srcDir, "current")
+	if err := os.Symlink(targetDir, symlinkPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	cfg := &config.Config{
+		Git:       config.GitModeDisable,
+		VaultPath: vaultDir,
+		Watching: []config.Watched{
+			{Path: ".config/themes", Enabled: true},
+		},
+	}
+
+	copier := &Copier{
+		cfg:        cfg,
+		home:       homeDir,
+		vaultDir:   vaultDir,
+		snapfigDir: filepath.Dir(vaultDir),
+	}
+
+	result, err := copier.Copy()
+	if err != nil {
+		t.Fatalf("Copy() error: %v", err)
+	}
+
+	markerPath := filepath.Join(vaultDir, ".config", "themes", "current.snapfig-symlink")
+	content, err := os.ReadFile(markerPath)
+	if err != nil {
+		t.Fatalf("marker file not created: %v", err)
+	}
+
+	expected := "ln -s " + targetDir + " current\n"
+	if string(content) != expected {
+		t.Errorf("marker content = %q, want %q", string(content), expected)
+	}
+
+	targetCopied := filepath.Join(vaultDir, ".config", "themes", "current", "theme.yml")
+	if _, err := os.Stat(targetCopied); !os.IsNotExist(err) {
+		t.Error("symlink target should not be copied")
+	}
+
+	if result.FilesUpdated != 1 {
+		t.Errorf("Copy() updated %d files, want 1 (marker only)", result.FilesUpdated)
+	}
+}
