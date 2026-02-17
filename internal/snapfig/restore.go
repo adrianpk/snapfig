@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/adrianpk/snapfig/internal/config"
@@ -110,6 +111,13 @@ func (r *Restorer) restoreDir(src, dst string, gitMode config.GitMode, result *R
 		srcPath := filepath.Join(src, entry.Name())
 		dstName := entry.Name()
 
+		if strings.HasSuffix(entry.Name(), symlinkMarkerExt) {
+			if err := r.restoreSymlink(srcPath, dst, result); err != nil {
+				return err
+			}
+			continue
+		}
+
 		// Revert .git_disabled back to .git
 		if entry.Name() == ".git_disabled" && entry.IsDir() && gitMode == config.GitModeDisable {
 			dstName = ".git"
@@ -209,6 +217,57 @@ func (r *Restorer) restoreFile(src, dst string, mode os.FileMode, result *Restor
 
 	result.FilesUpdated++
 	return nil
+}
+
+func (r *Restorer) restoreSymlink(markerPath, dstDir string, result *RestoreResult) error {
+	content, err := os.ReadFile(markerPath)
+	if err != nil {
+		return err
+	}
+
+	target, name, err := parseSymlinkMarker(string(content))
+	if err != nil {
+		return r.restoreFile(markerPath, filepath.Join(dstDir, filepath.Base(markerPath)), 0644, result)
+	}
+
+	dstPath := filepath.Join(dstDir, name)
+
+	if existingTarget, err := os.Readlink(dstPath); err == nil {
+		if existingTarget == target {
+			result.FilesSkipped++
+			return nil
+		}
+		os.Remove(dstPath)
+	} else if !os.IsNotExist(err) {
+		os.RemoveAll(dstPath)
+	}
+
+	if _, err := os.Stat(target); os.IsNotExist(err) {
+		markerDst := filepath.Join(dstDir, filepath.Base(markerPath))
+		return r.restoreFile(markerPath, markerDst, 0644, result)
+	}
+
+	if err := os.Symlink(target, dstPath); err == nil {
+		result.FilesUpdated++
+		return nil
+	}
+
+	markerDst := filepath.Join(dstDir, filepath.Base(markerPath))
+	return r.restoreFile(markerPath, markerDst, 0644, result)
+}
+
+func parseSymlinkMarker(content string) (target, name string, err error) {
+	content = strings.TrimSpace(content)
+	if !strings.HasPrefix(content, "ln -s ") {
+		return "", "", fmt.Errorf("invalid marker format")
+	}
+
+	parts := strings.SplitN(content[6:], " ", 2)
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid marker format")
+	}
+
+	return parts[0], parts[1], nil
 }
 
 // VaultEntry represents a file or directory in the vault that matches config.

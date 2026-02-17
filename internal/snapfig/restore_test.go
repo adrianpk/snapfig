@@ -875,3 +875,292 @@ func TestListVaultEntriesDisabledItems(t *testing.T) {
 		t.Errorf("ListVaultEntries() entry = %q, want .testrc", entries[0].Path)
 	}
 }
+
+func TestRestoreSymlinkCreatesRealSymlink(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "restore-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	homeDir := filepath.Join(tmpDir, "home")
+	vaultDir := filepath.Join(tmpDir, "vault")
+
+	targetDir := filepath.Join(tmpDir, "target")
+	os.MkdirAll(targetDir, 0755)
+	os.WriteFile(filepath.Join(targetDir, "file.txt"), []byte("content"), 0644)
+
+	vaultSubDir := filepath.Join(vaultDir, ".config", "themes")
+	os.MkdirAll(vaultSubDir, 0755)
+	os.MkdirAll(homeDir, 0755)
+
+	markerContent := "ln -s " + targetDir + " current\n"
+	os.WriteFile(filepath.Join(vaultSubDir, "current.snapfig-symlink"), []byte(markerContent), 0644)
+
+	cfg := &config.Config{
+		Git:       config.GitModeDisable,
+		VaultPath: vaultDir,
+		Watching: []config.Watched{
+			{Path: ".config/themes", Enabled: true},
+		},
+	}
+
+	restorer := &Restorer{
+		cfg:        cfg,
+		home:       homeDir,
+		vaultDir:   vaultDir,
+		backupTime: time.Now().Format("200601021504"),
+	}
+
+	result, err := restorer.Restore()
+	if err != nil {
+		t.Fatalf("Restore() error: %v", err)
+	}
+
+	symlinkPath := filepath.Join(homeDir, ".config", "themes", "current")
+	info, err := os.Lstat(symlinkPath)
+	if err != nil {
+		t.Fatalf("symlink not created: %v", err)
+	}
+
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Error("expected symlink, got regular file")
+	}
+
+	linkTarget, err := os.Readlink(symlinkPath)
+	if err != nil {
+		t.Fatalf("failed to read symlink: %v", err)
+	}
+	if linkTarget != targetDir {
+		t.Errorf("symlink target = %q, want %q", linkTarget, targetDir)
+	}
+
+	markerPath := filepath.Join(homeDir, ".config", "themes", "current.snapfig-symlink")
+	if _, err := os.Stat(markerPath); !os.IsNotExist(err) {
+		t.Error("marker file should not exist when symlink was created")
+	}
+
+	if result.FilesUpdated != 1 {
+		t.Errorf("Restore() updated %d files, want 1", result.FilesUpdated)
+	}
+}
+
+func TestRestoreSymlinkFallsBackToMarker(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "restore-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	homeDir := filepath.Join(tmpDir, "home")
+	vaultDir := filepath.Join(tmpDir, "vault")
+
+	vaultSubDir := filepath.Join(vaultDir, ".config", "themes")
+	os.MkdirAll(vaultSubDir, 0755)
+	os.MkdirAll(homeDir, 0755)
+
+	nonExistentTarget := filepath.Join(tmpDir, "does-not-exist")
+	markerContent := "ln -s " + nonExistentTarget + " current\n"
+	os.WriteFile(filepath.Join(vaultSubDir, "current.snapfig-symlink"), []byte(markerContent), 0644)
+
+	cfg := &config.Config{
+		Git:       config.GitModeDisable,
+		VaultPath: vaultDir,
+		Watching: []config.Watched{
+			{Path: ".config/themes", Enabled: true},
+		},
+	}
+
+	restorer := &Restorer{
+		cfg:        cfg,
+		home:       homeDir,
+		vaultDir:   vaultDir,
+		backupTime: time.Now().Format("200601021504"),
+	}
+
+	result, err := restorer.Restore()
+	if err != nil {
+		t.Fatalf("Restore() error: %v", err)
+	}
+
+	markerPath := filepath.Join(homeDir, ".config", "themes", "current.snapfig-symlink")
+	content, err := os.ReadFile(markerPath)
+	if err != nil {
+		t.Fatalf("marker file not copied: %v", err)
+	}
+	if string(content) != markerContent {
+		t.Errorf("marker content = %q, want %q", string(content), markerContent)
+	}
+
+	if result.FilesUpdated != 1 {
+		t.Errorf("Restore() updated %d files, want 1", result.FilesUpdated)
+	}
+}
+
+func TestRestoreSymlinkSkipsIdentical(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "restore-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	homeDir := filepath.Join(tmpDir, "home")
+	vaultDir := filepath.Join(tmpDir, "vault")
+
+	targetDir := filepath.Join(tmpDir, "target")
+	os.MkdirAll(targetDir, 0755)
+
+	vaultSubDir := filepath.Join(vaultDir, ".config", "themes")
+	os.MkdirAll(vaultSubDir, 0755)
+
+	markerContent := "ln -s " + targetDir + " current\n"
+	os.WriteFile(filepath.Join(vaultSubDir, "current.snapfig-symlink"), []byte(markerContent), 0644)
+
+	homeSubDir := filepath.Join(homeDir, ".config", "themes")
+	os.MkdirAll(homeSubDir, 0755)
+	os.Symlink(targetDir, filepath.Join(homeSubDir, "current"))
+
+	cfg := &config.Config{
+		Git:       config.GitModeDisable,
+		VaultPath: vaultDir,
+		Watching: []config.Watched{
+			{Path: ".config/themes", Enabled: true},
+		},
+	}
+
+	restorer := &Restorer{
+		cfg:        cfg,
+		home:       homeDir,
+		vaultDir:   vaultDir,
+		backupTime: time.Now().Format("200601021504"),
+	}
+
+	result, err := restorer.Restore()
+	if err != nil {
+		t.Fatalf("Restore() error: %v", err)
+	}
+
+	if result.FilesSkipped != 1 {
+		t.Errorf("Restore() skipped %d files, want 1", result.FilesSkipped)
+	}
+	if result.FilesUpdated != 0 {
+		t.Errorf("Restore() updated %d files, want 0", result.FilesUpdated)
+	}
+}
+
+func TestRestoreSymlinkUpdatesTarget(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "restore-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	homeDir := filepath.Join(tmpDir, "home")
+	vaultDir := filepath.Join(tmpDir, "vault")
+
+	oldTarget := filepath.Join(tmpDir, "old-target")
+	newTarget := filepath.Join(tmpDir, "new-target")
+	os.MkdirAll(oldTarget, 0755)
+	os.MkdirAll(newTarget, 0755)
+
+	vaultSubDir := filepath.Join(vaultDir, ".config", "themes")
+	os.MkdirAll(vaultSubDir, 0755)
+
+	markerContent := "ln -s " + newTarget + " current\n"
+	os.WriteFile(filepath.Join(vaultSubDir, "current.snapfig-symlink"), []byte(markerContent), 0644)
+
+	homeSubDir := filepath.Join(homeDir, ".config", "themes")
+	os.MkdirAll(homeSubDir, 0755)
+	os.Symlink(oldTarget, filepath.Join(homeSubDir, "current"))
+
+	cfg := &config.Config{
+		Git:       config.GitModeDisable,
+		VaultPath: vaultDir,
+		Watching: []config.Watched{
+			{Path: ".config/themes", Enabled: true},
+		},
+	}
+
+	restorer := &Restorer{
+		cfg:        cfg,
+		home:       homeDir,
+		vaultDir:   vaultDir,
+		backupTime: time.Now().Format("200601021504"),
+	}
+
+	result, err := restorer.Restore()
+	if err != nil {
+		t.Fatalf("Restore() error: %v", err)
+	}
+
+	linkTarget, err := os.Readlink(filepath.Join(homeSubDir, "current"))
+	if err != nil {
+		t.Fatalf("failed to read symlink: %v", err)
+	}
+	if linkTarget != newTarget {
+		t.Errorf("symlink target = %q, want %q", linkTarget, newTarget)
+	}
+
+	if result.FilesUpdated != 1 {
+		t.Errorf("Restore() updated %d files, want 1", result.FilesUpdated)
+	}
+}
+
+func TestParseSymlinkMarker(t *testing.T) {
+	tests := []struct {
+		name       string
+		content    string
+		wantTarget string
+		wantName   string
+		wantErr    bool
+	}{
+		{
+			name:       "valid marker",
+			content:    "ln -s /path/to/target linkname\n",
+			wantTarget: "/path/to/target",
+			wantName:   "linkname",
+		},
+		{
+			name:       "valid marker no newline",
+			content:    "ln -s /path/to/target linkname",
+			wantTarget: "/path/to/target",
+			wantName:   "linkname",
+		},
+		{
+			name:    "invalid prefix",
+			content: "symlink /path/to/target linkname\n",
+			wantErr: true,
+		},
+		{
+			name:    "missing name",
+			content: "ln -s /path/to/target\n",
+			wantErr: true,
+		},
+		{
+			name:    "empty content",
+			content: "",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			target, name, err := parseSymlinkMarker(tt.content)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("parseSymlinkMarker() expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseSymlinkMarker() unexpected error: %v", err)
+			}
+			if target != tt.wantTarget {
+				t.Errorf("target = %q, want %q", target, tt.wantTarget)
+			}
+			if name != tt.wantName {
+				t.Errorf("name = %q, want %q", name, tt.wantName)
+			}
+		})
+	}
+}
